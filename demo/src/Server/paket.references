@@ -1,0 +1,7 @@
+group Server
+    FSharp.Core
+    Giraffe
+    Microsoft.AspNetCore
+    Microsoft.AspNetCore.Mvc
+    Microsoft.FSharpLu
+    Microsoft.FSharpLu.Json

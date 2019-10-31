@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="App\Domain.fs" />
+    <Compile Include="App\Utils.fs" />
+    <Compile Include="App\States.fs" />
+    <Compile Include="App\Views.fs" />
+    <Compile Include="Startup.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Fun.OData.Query\Fun.OData.Query.fsproj" />
+    <ProjectReference Include="..\Dtos\Dtos.fsproj" />
+  </ItemGroup>
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>
