@@ -2,6 +2,7 @@ namespace Fun.OData.Giraffe
 
 open System
 open System.Linq
+open System.Collections.Generic
 open Microsoft.AspNet.OData.Query
 open Microsoft.AspNet.OData.Builder
 open Microsoft.AspNetCore.Http
@@ -16,7 +17,7 @@ type ODataResult =
 type ODataProp<'T when 'T: not struct> =
   | ConfigQuerySettings of (ODataQuerySettings -> unit)
   | ConfigEntitySet of (ODataConventionModelBuilder -> unit)
-  | GetData of (HttpContext -> IQueryable<'T>)
-  | Source of IQueryable<'T>
-  | Filter of (IQueryable<'T> -> IQueryable<'T>)
+  | GetData of (HttpContext -> IEnumerable<'T>)
+  | Source of IEnumerable<'T>
+  | Filter of (IEnumerable<'T> -> IEnumerable<'T>)
   | HttpContext of HttpContext
