@@ -1,11 +1,13 @@
 group Server
   source https://api.nuget.org/v3/index.json
   storage: none
+  framework: netcoreapp2.2
 
   nuget FSharp.Core
   nuget Giraffe
   nuget Microsoft.AspNetCore
   nuget Microsoft.AspNetCore.Mvc
+  nuget Microsoft.FSharpLu.Json
 
 
 group Client

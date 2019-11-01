@@ -3,3 +3,4 @@ group Server
     Giraffe
     Microsoft.AspNetCore
     Microsoft.AspNetCore.Mvc
+    Microsoft.FSharpLu.Json

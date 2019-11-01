@@ -6,6 +6,7 @@
     <EnableMSDeployAppOffline>true</EnableMSDeployAppOffline>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Serializer.fs" />
     <Compile Include="Routes.fs" />
     <Compile Include="Startup.fs" />
   </ItemGroup>

@@ -6,6 +6,7 @@ open Microsoft.AspNetCore.Hosting
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.AspNet.OData.Extensions
 open Giraffe
+open Giraffe.Serialization.Json
 
 
 [<EntryPoint>]
@@ -21,7 +22,8 @@ let main args =
     .ConfigureServices(fun services ->
         services.AddMvc() |> ignore
         services.AddOData() |> ignore
-        services.AddGiraffe() |> ignore)
+        services.AddGiraffe() |> ignore
+        services.AddSingleton<IJsonSerializer>(Serializer.FSharpLuJsonSerializer()) |> ignore)
     .UseUrls("http://localhost:5000")
     .UseIISIntegration()
     .Build()
