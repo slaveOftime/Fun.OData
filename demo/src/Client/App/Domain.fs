@@ -30,7 +30,7 @@ type Filter =
     SearchName: string option
     MinPrice: decimal option
     FromCreatedDate: DateTime option
-    ToCreatedDate: DateTime option}
+    ToCreatedDate: DateTime option }
   static member defaultValue =
     { PageSize = 5
       Page = 1

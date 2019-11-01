@@ -39,10 +39,10 @@ let update msg state =
                 Skip ((filter.Page - 1) * filter.PageSize)
                 Take filter.PageSize
                 Count
+                External "etest1=123"
+                External "etest2=56"
+                Filter (filter.SearchName |> Option.map (contains "Name") |> Option.defaultValue "")
                 Filter (andQueries [
-                  match filter.SearchName with
-                    | None -> ()
-                    | Some x -> contains "Name" x
                   match filter.MinPrice with
                     | None -> ()
                     | Some x -> gt "Price" x
@@ -59,7 +59,7 @@ let update msg state =
                 IsLoading = true
                 ErrorInfo = None
                 ODataQuery = Some query }
-            , Http.request (sprintf "%s/demo?%s" serverHost query)
+            , Http.request (sprintf "%s/demo%s" serverHost query)
               |> Http.method GET
               |> handleHttpJsonAsync LoadedData (Some >> OnError)
               |> Cmd.OfAsync.result
@@ -77,7 +77,7 @@ let update msg state =
     | LoadDataById id ->
         let query =
           [
-            Id (int64 id)
+            Id (string id)
             SelectType typeof<DemoData>
             ExpandEx [
               "Items", [ SelectType typeof<Item> ]

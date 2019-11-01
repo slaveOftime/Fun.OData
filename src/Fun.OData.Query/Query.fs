@@ -6,6 +6,7 @@ open Microsoft.FSharp.Reflection
 
 type FieldName = string 
 
+
 type Query =
     | Select of string
     | SelectType of Type
@@ -18,12 +19,12 @@ type Query =
     | Expand of string
     | ExpandEx of (FieldName * Query list) list
     | External of string
-    | Id of int64
+    | Id of string
 
 
 module Query =
 
-    let generateSelectQueryByType sourceType lowerFirstCase =
+    let generateSelectQueryByType lowerFirstCase sourceType  =
         FSharpType.GetRecordFields sourceType
         |> Seq.map (fun x -> x.Name)
         |> Seq.map (fun x ->
@@ -35,36 +36,56 @@ module Query =
             | _ -> x)
         |> fun x -> String.Join(",", x)
 
-    let inline generateSelectQuery<'T>() = generateSelectQueryByType typeof<'T> None
+    let inline generateSelectQuery<'T>() = generateSelectQueryByType None typeof<'T>
 
 
     let rec combineQuery spliter qs =
-        qs
-        |> List.distinct
-        |> List.fold (fun s q ->
-            match q with
-            | Select x      -> s + spliter + "$select=" + x
-            | SelectType t  -> s + spliter + "$select=" + (generateSelectQueryByType t None)
-            | OrderBy x     -> s + spliter + "$orderBy=" + x
-            | OrderByDesc x -> s + spliter + "$orderBy=" + x + " desc"
-            | Count         -> s + spliter + "$count=true"
-            | Filter x      -> if String.IsNullOrEmpty x then s else s + spliter + "$filter=" + x
-            | Take x        -> s + spliter + "$top=" + (string x)
-            | Skip x        -> s + spliter + "$skip=" + (string x)
-            | Expand x      -> s + spliter + "$expand=" + x
-            | ExpandEx ls   -> s + spliter + "$expand=" + (ls
-                                                            |> List.map (fun (fieldName, qs) -> 
-                                                                sprintf "%s%s" 
-                                                                        fieldName 
-                                                                        (if qs.Length = 0 
-                                                                          then "" 
-                                                                          else sprintf "(%s)" (combineQuery ";" qs)))
-                                                            |> fun x -> String.Join(",", x))
-            | External x    -> s + spliter + x
-            | Id _          -> s)
-            ""
-        |> fun x -> x.Substring(1, x.Length - 1)
+        let safeAdd key map x state =
+          if String.IsNullOrEmpty x then state
+          else state |> Map.add key (map x)
 
+        let maps =
+          qs
+          |> List.distinct
+          |> List.fold (fun s q ->
+              match q with
+              | Id _         -> s
+              | External x    -> s |> Map.add (sprintf "External-%d" s.Count) x
+              | Select x      -> s |> safeAdd "Select"    (sprintf "$select=%s") x
+              | SelectType t  -> s |> Map.add "Select"    (generateSelectQueryByType None t |> sprintf"$select=%s")
+              | OrderBy x     -> s |> safeAdd "OrderBy"   (sprintf "$orderBy=%s") x
+              | OrderByDesc x -> s |> safeAdd "OrderBy"   (sprintf "$orderBy=%s desc") x
+              | Count         -> s |> Map.add "Count"     "$count=true"
+              | Filter x      -> s |> safeAdd (sprintf "Filter-%d" s.Count) (sprintf "%s") x
+              | Take x        -> s |> safeAdd "Take"      (sprintf "$top=%s") (string x)
+              | Skip x        -> s |> safeAdd "Skip"      (sprintf "$skip=%s") (string x)
+              | Expand x      -> s |> safeAdd "Expand"    (sprintf "$expand=%s") x
+              | ExpandEx ls   -> s |> safeAdd "Expand"    (sprintf "$expand=%s") (ls
+                                                                                 |> List.map (fun (fieldName, qs) -> 
+                                                                                     sprintf "%s%s" 
+                                                                                             fieldName 
+                                                                                             (if qs.Length = 0 
+                                                                                              then "" 
+                                                                                              else sprintf "(%s)" (combineQuery ";" qs)))
+                                                                                 |> String.concat ",")
+              )
+              Map.empty
+
+        [
+          yield! maps |> Map.filter (fun k _ -> k.StartsWith "Filter-" |> not) |> Map.toSeq |> Seq.map snd
+
+          maps
+          |> Map.filter (fun k _ -> k.StartsWith "Filter-")
+          |> Map.toSeq
+          |> Seq.map (snd >> sprintf "(%s)")
+          |> String.concat " and "
+          |> function
+              | "" -> ""
+              | x -> sprintf "$filter=%s" x
+        ]
+        |> Seq.filter (String.IsNullOrWhiteSpace >> not)
+        |> String.concat spliter
+          
     
     let generate qs =
         qs 
@@ -73,8 +94,8 @@ module Query =
             | _ -> None)
         |> Option.defaultValue ""
         |> fun x -> x + "?" + combineQuery "&" qs
-    
+
+
     let inline generateFor<'T> qs =
         let select = generateSelectQuery<'T> () |> Select
         generate (qs@[select])
-

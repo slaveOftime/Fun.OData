@@ -22,6 +22,7 @@ let main args =
         services.AddMvc() |> ignore
         services.AddOData() |> ignore
         services.AddGiraffe() |> ignore)
+    .UseUrls("http://localhost:5000")
     .UseIISIntegration()
     .Build()
     .Run()

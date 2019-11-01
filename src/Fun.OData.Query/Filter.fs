@@ -3,16 +3,11 @@ module Fun.OData.Query.Filter
 
     let combineFilter operator filters =
         filters
-        |> List.fold 
-            (fun s x ->
-                match s, x with
-                | Some s, x    -> Some (sprintf "(%s %s %s)" s operator x)
-                | None, _      -> Some (sprintf "(%s)" x))
-            None
-        |> Option.defaultValue ""
+        |> Seq.map (sprintf "(%s)")
+        |> String.concat (sprintf " %s " operator)
 
-    let andQueries = combineFilter "and"
-    let orQueries  = combineFilter "or"
+    let andQueries filters = combineFilter "and" filters
+    let orQueries  filters = combineFilter "or" filters
 
     let gt name value       = sprintf "%s gt %A" name value
     let lt name value       = sprintf "%s lt %A" name value
