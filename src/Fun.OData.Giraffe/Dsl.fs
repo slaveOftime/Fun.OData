@@ -2,23 +2,11 @@ namespace Fun.OData.Giraffe
 
 open System
 open System.Linq
-open System.Collections.Generic
 open Microsoft.AspNet.OData
 open Microsoft.AspNet.OData.Query
 open Microsoft.AspNet.OData.Builder
 open Microsoft.AspNet.OData.Extensions
-open Microsoft.AspNetCore.Http
 open Giraffe
-
-
-[<RequireQualifiedAccess>]
-type ODataProp<'T when 'T: not struct> =
-  | ConfigQuerySettings of (ODataQuerySettings -> unit)
-  | ConfigEntitySet of (EntitySetConfiguration<'T> -> unit)
-  | GetData of (HttpContext -> 'T seq)
-  | Source of 'T seq
-  | ById of ('T seq -> 'T)
-  | HttpContext of HttpContext
 
 
 module OData =
@@ -28,13 +16,15 @@ module OData =
       match ctx with
       | None -> { Count = Nullable(); Value = [].AsQueryable() }
       | Some ctx ->
-          let configEntitySet = props |> List.choose (function ODataProp.ConfigEntitySet x -> Some x | _ -> None) |> List.tryLast |> Option.defaultValue ignore
+          let configEntitySet = props |> List.choose (function ODataProp.ConfigEntitySet x -> Some x | _ -> None)
+          let configSettings  = props |> List.choose (function ODataProp.ConfigQuerySettings x -> Some x | _ -> None)
           let getData         = props |> List.choose (function ODataProp.GetData x -> Some x | _ -> None) |> List.tryLast
           let source          = props |> List.choose (function ODataProp.Source x -> Some x | _ -> None) |> Seq.concat
-          let byId            = props |> List.choose (function ODataProp.ById x -> Some x | _ -> None) |> List.tryLast
+          let byId            = props |> List.choose (function ODataProp.Filter x -> Some x | _ -> None) |> List.tryLast
 
           let modelbuilder = ODataConventionModelBuilder(ctx.Request.HttpContext.RequestServices, isQueryCompositionMode = true)
-          modelbuilder.EntitySet<'T>(entityClrType.Name) |> configEntitySet |> ignore
+          modelbuilder.EntitySet<'T>(entityClrType.Name) |> ignore
+          configEntitySet |> List.iter (fun config -> modelbuilder |> config)
 
           let model = modelbuilder.GetEdmModel()
           let modelContext = ODataQueryContext(model, entityClrType, ctx.Request.ODataFeature().Path)
@@ -45,39 +35,42 @@ module OData =
               EnsureStableOrdering = false,
               EnableConstantParameterization = true,
               PageSize = Nullable(20))
+          configSettings |> List.iter (fun config -> config querySettings)
       
           let result =
             match getData with
             | None -> source.AsQueryable()
-            | Some h -> (h ctx).AsQueryable()
+            | Some h -> h ctx
 
-          match byId with
-          | Some byId -> { Count = Nullable(); Value = [ result |> byId ].AsQueryable() }
-          | None ->
-              let value = queryOption.ApplyTo(result, querySettings)
-              if queryOption.Count <> null && queryOption.Count.Value then
-                  let filterResult =
-                      if queryOption.Filter <> null 
-                      then queryOption.Filter.ApplyTo(result, querySettings).Cast()
-                      else result
-                  { Count = queryOption.Count.GetEntityCount(filterResult)
-                    Value = value }
-              else 
-                  { Count = Nullable()
-                    Value = value }
+          let finalResult =
+            match byId with
+            | Some single -> result |> single
+            | None -> result
+
+          let value = queryOption.ApplyTo(finalResult, querySettings)
+          if queryOption.Count <> null && queryOption.Count.Value then
+              let filterResult =
+                  if queryOption.Filter <> null 
+                  then queryOption.Filter.ApplyTo(finalResult, querySettings).Cast()
+                  else finalResult
+              { Count = queryOption.Count.GetEntityCount(filterResult)
+                Value = value }
+          else 
+              { Count = Nullable()
+                Value = value }
 
 
   let queryPro props: HttpHandler =
       fun nxt ctx ->
           let result = getODataResult [ yield! props; ODataProp.HttpContext ctx ]
-          let isById = props |> List.exists (function ODataProp.ById _ -> true | _ -> false)
+          let isById = props |> List.exists (function ODataProp.Filter _ -> true | _ -> false)
           if isById then
             let temp = result.Value.Cast<_>().FirstOrDefault()
             json temp nxt ctx
           else json result nxt ctx
 
 
-  let queryEF props (f: 'DbContext -> IEnumerable<'T>) =
+  let queryFromService props (f: 'DbContext -> IQueryable<'T>) =
       queryPro [
         yield! props
         ODataProp.GetData (fun ctx ->
@@ -89,11 +82,11 @@ module OData =
   /// Query data from sequence
   let query source  = queryPro [ ODataProp.Source source ]
   /// Query only one item by id
-  let item f id     = queryPro [ ODataProp.ById (fun _ -> f id) ]
+  let item f id     = queryPro [ ODataProp.Filter (fun _ -> f id) ]
   /// Query data from DI service
-  let ef (f: 'Service -> IEnumerable<'T>) = queryEF [] f
+  let fromService (f: 'Service -> IQueryable<'T>) = queryFromService [] f
   /// Query only one item from DI service by id
-  let efi (f: 'Service -> 'Id -> 'T) id   = queryEF [ ODataProp.ById (fun data -> data.FirstOrDefault()) ] (fun ctx -> [ f ctx id ].AsEnumerable())
+  let fromServicei (f: 'Service -> 'Id -> IQueryable<'T>) id = queryFromService [ ODataProp.Filter (fun x -> x.Take(1)) ] (fun ctx -> f ctx id)
 
 
 type ODataQuery<'T when 'T: not struct>() =
@@ -101,7 +94,7 @@ type ODataQuery<'T when 'T: not struct>() =
 
   member this.configQuerySettings config = props <- props@[ ODataProp.ConfigQuerySettings config ]; this
   member this.configEntitySet config = props <- props@[ ODataProp.ConfigEntitySet config ]; this
-  member this.getData find = props <- props@[ ODataProp.GetData find ]; this
-  member this.withSource source = props <- props@[ ODataProp.Source source ]; this
-  member this.byId find = props <- props@[ ODataProp.ById find ]; this
+  member this.fromService find = props <- props@[ ODataProp.GetData find ]; this
+  member this.source source = props <- props@[ ODataProp.Source source ]; this
+  member this.filter find = props <- props@[ ODataProp.Filter find ]; this
   member _.query() = OData.queryPro props

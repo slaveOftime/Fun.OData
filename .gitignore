@@ -17,3 +17,4 @@ deploy
 *.user
 src/Server/SiteDb.db
 paket.exe
+/demo/src/Server/demo.db

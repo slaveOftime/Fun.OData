@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Fun.OData.Giraffe\Fun.OData.Giraffe.fsproj" />
+    <ProjectReference Include="..\Db\Db.csproj" />
     <ProjectReference Include="..\Dtos\Dtos.fsproj" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
