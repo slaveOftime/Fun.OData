@@ -3,6 +3,7 @@ module Server.Routes
 open System
 open System.Linq
 open Giraffe
+open Microsoft.AspNet.OData.Builder
 open Fun.OData.Giraffe
 open Dtos.DemoData
 
@@ -48,10 +49,26 @@ let demoData =
   ]
 
 
+let ignorePrice (builder: EntitySetConfiguration<DemoData>) =
+    builder.EntityType.Ignore(fun x -> x.Price)
+  
+
+
 let mainRoutes: HttpHandler =
     choose
         [
-            GET >=> routeCi  "/demo"      >=> odataQ (fun _ _ -> demoData.AsQueryable())
-            GET >=> routeCif "/demo(%i)"     (odataItem id (fun id _ _ -> demoData.Where(fun x -> x.Id = id).AsQueryable()))
+            GET >=> routeCi  "/demo"      >=> OData.query demoData
+            GET >=> routeCif "/demo(%i)"     (OData.item (fun id -> demoData.FirstOrDefault(fun x -> x.Id = id)))
+
+            GET >=> routeCi  "/demopro"   >=> OData.queryPro [
+                                                ODataProp.Source demoData
+                                                ODataProp.ConfigEntitySet (fun builder -> builder.EntityType.Ignore(fun x -> x.Price))
+                                              ]
+
+            GET >=> routeCif "/demopro(%i)"  (fun id -> OData.queryPro
+                                                          [
+                                                            ODataProp.ConfigEntitySet (fun builder -> builder.EntityType.Ignore(fun x -> x.Price))
+                                                            ODataProp.ById (fun _ -> demoData.Where(fun x -> x.Id = id).FirstOrDefault())
+                                                          ])
         ]
 

@@ -35,7 +35,7 @@ let update msg state =
         | Ok filter ->
             let query =
               [
-                SelectType typeof<DemoData>
+                SelectType typeof<DemoDataBrief>
                 Skip ((filter.Page - 1) * filter.PageSize)
                 Take filter.PageSize
                 Count

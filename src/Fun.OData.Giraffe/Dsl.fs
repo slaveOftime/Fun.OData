@@ -2,6 +2,7 @@ namespace Fun.OData.Giraffe
 
 open System
 open System.Linq
+open System.Collections.Generic
 open Microsoft.AspNet.OData
 open Microsoft.AspNet.OData.Query
 open Microsoft.AspNet.OData.Builder
@@ -10,75 +11,86 @@ open Microsoft.AspNetCore.Http
 open Giraffe
 
 
-[<AutoOpen>]
+[<RequireQualifiedAccess>]
+type ODataProp<'T when 'T: not struct> =
+  | ConfigQuerySettings of (ODataQuerySettings -> unit)
+  | ConfigEntitySet of (EntitySetConfiguration<'T> -> unit)
+  | GetData of (HttpContext -> 'T seq)
+  | Source of 'T seq
+  | ById of ('T seq -> 'T)
+  | HttpContext of HttpContext
+
+
 module OData =
-  let getODataResult<'T> (handler: ODataQueryHandler<'T>) (ctx: HttpContext) =
+  let getODataResult<'T when 'T: not struct> (props: ODataProp<'T> list) =
       let entityClrType = typeof<'T>
-      let odataModelbuilder = ODataConventionModelBuilder(ctx.Request.HttpContext.RequestServices, isQueryCompositionMode = true)
-      let entityTypeConfiguration = odataModelbuilder.AddEntityType(entityClrType)
-      odataModelbuilder.AddEntitySet(entityClrType.Name, entityTypeConfiguration) |> ignore
-      let model = odataModelbuilder.GetEdmModel()
-      let modelContext = ODataQueryContext(model, entityClrType, ctx.Request.ODataFeature().Path)
-      let queryOption = ODataQueryOptions<'T>(modelContext, ctx.Request)
+      let ctx = props |> List.choose (function ODataProp.HttpContext x -> Some x | _ -> None) |> List.tryLast
+      match ctx with
+      | None -> { Count = Nullable(); Value = [].AsQueryable() }
+      | Some ctx ->
+          let configEntitySet = props |> List.choose (function ODataProp.ConfigEntitySet x -> Some x | _ -> None) |> List.tryLast |> Option.defaultValue ignore
+          let getData         = props |> List.choose (function ODataProp.GetData x -> Some x | _ -> None) |> List.tryLast
+          let source          = props |> List.choose (function ODataProp.Source x -> Some x | _ -> None) |> Seq.concat
+          let byId            = props |> List.choose (function ODataProp.ById x -> Some x | _ -> None) |> List.tryLast
 
-      let querySettings =
-        ODataQuerySettings(
-          EnsureStableOrdering = false,
-          EnableConstantParameterization = true,
-          PageSize = Nullable(20))
+          let modelbuilder = ODataConventionModelBuilder(ctx.Request.HttpContext.RequestServices, isQueryCompositionMode = true)
+          modelbuilder.EntitySet<'T>(entityClrType.Name) |> configEntitySet |> ignore
 
-      let result = handler ctx queryOption
-      let value = queryOption.ApplyTo(result, querySettings)
-      if queryOption.Count <> null && queryOption.Count.Value then
-          let filterResult =
-              if queryOption.Filter <> null 
-              then queryOption.Filter.ApplyTo(result, querySettings).Cast()
-              else result
-          { Count = 
-              queryOption.Count.GetEntityCount(filterResult)
-              |> Option.ofNullable
-              |> function
-                  | Some x -> Nullable (int x)
-                  | None -> Nullable()
-            Value = value }
-      else 
-          { Count = Nullable()
-            Value = value}
+          let model = modelbuilder.GetEdmModel()
+          let modelContext = ODataQueryContext(model, entityClrType, ctx.Request.ODataFeature().Path)
+          let queryOption = ODataQueryOptions<'T>(modelContext, ctx.Request)
+      
+          let querySettings =
+            ODataQuerySettings(
+              EnsureStableOrdering = false,
+              EnableConstantParameterization = true,
+              PageSize = Nullable(20))
+      
+          let result =
+            match getData with
+            | None -> source.AsQueryable()
+            | Some h -> (h ctx).AsQueryable()
+
+          match byId with
+          | Some byId -> { Count = Nullable(); Value = [ result |> byId ].AsQueryable() }
+          | None ->
+              let value = queryOption.ApplyTo(result, querySettings)
+              if queryOption.Count <> null && queryOption.Count.Value then
+                  let filterResult =
+                      if queryOption.Filter <> null 
+                      then queryOption.Filter.ApplyTo(result, querySettings).Cast()
+                      else result
+                  { Count = queryOption.Count.GetEntityCount(filterResult)
+                    Value = value }
+              else 
+                  { Count = Nullable()
+                    Value = value }
 
 
-  let odataQ<'T> handler: HttpHandler =
+  let queryPro props: HttpHandler =
       fun nxt ctx ->
-          let result = getODataResult<'T> handler ctx
-          json result nxt ctx
-
-  let odataQs<'T> map handler: HttpHandler =
-      fun nxt ctx ->
-          let result = getODataResult<'T> (fun ctx' _ -> handler ctx') ctx |> map
-          json result nxt ctx
-
-
-  let odataItem<'T, 'Id> map handler (id: 'Id): HttpHandler =
-      fun nxt ctx ->
-          let result = 
-              getODataResult<'T> (handler id) ctx
-              |> fun x ->
-                  match x.Value.Cast<_>() with
-                  | x when x.Count() > 0 -> x.FirstOrDefault()
-                  | _ -> null
-              |> map
-          json result nxt ctx
+          let result = getODataResult [ yield! props; ODataProp.HttpContext ctx ]
+          let isById = props |> List.exists (function ODataProp.ById _ -> true | _ -> false)
+          if isById then
+            let temp = result.Value.Cast<_>().FirstOrDefault()
+            json temp nxt ctx
+          else json result nxt ctx
 
 
-  let odataQEFm map (f: 'DbContext -> IQueryable<'T>) =
-      odataQs map (fun ctx -> 
+  let queryEF props (f: 'DbContext -> IEnumerable<'T>) =
+      queryPro [
+        yield! props
+        ODataProp.GetData (fun ctx ->
           let db = ctx.GetService<'DbContext>()
           f db)
-  let odataQEF f = odataQEFm id f
+      ]
 
-  let odataQEFim map (f: 'DbContext -> 'Id -> IQueryable<'T>) id =
-      odataItem map
-          (fun id ctx opts -> 
-              let db = ctx.GetService<'DbContext>()
-              f db id)
-          id
-  let odataQEFi f = odataQEFim id f
+
+  /// Query data from sequence
+  let query source  = queryPro [ ODataProp.Source source ]
+  /// Query only one item by id
+  let item f id     = queryPro [ ODataProp.ById (fun _ -> f id) ]
+  /// Query data from DI service
+  let ef (f: 'Service -> IEnumerable<'T>) = queryEF [] f
+  /// Query only one item from DI service by id
+  let efi (f: 'Service -> 'Id -> 'T) id   = queryEF [ ODataProp.ById (fun data -> data.FirstOrDefault()) ] (fun ctx -> [ f ctx id ].AsEnumerable())
