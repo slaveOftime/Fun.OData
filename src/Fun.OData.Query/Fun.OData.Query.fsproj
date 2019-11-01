@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <Compile Include="Query.fs" />
+    <Compile Include="Filter.fs" />
   </ItemGroup>
 
 </Project>

@@ -6,8 +6,6 @@ group Server
   nuget Giraffe
   nuget Microsoft.AspNetCore
   nuget Microsoft.AspNetCore.Mvc
-  nuget Microsoft.FSharpLu
-  nuget Microsoft.FSharpLu.Json
 
 
 group Client

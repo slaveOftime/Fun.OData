@@ -39,19 +39,19 @@ let update msg state =
                 Skip ((filter.Page - 1) * filter.PageSize)
                 Take filter.PageSize
                 Count
-                Filter (Query.combineAndFilter [
+                Filter (andQueries [
                   match filter.SearchName with
-                    | Some x -> sprintf "contains(Name, '%s')" x
                     | None -> ()
+                    | Some x -> contains "Name" x
                   match filter.MinPrice with
                     | None -> ()
-                    | Some x -> sprintf "Price gt %M" x
+                    | Some x -> gt "Price" x
                   match filter.FromCreatedDate with
                     | None -> ()
-                    | Some x -> sprintf "CreatedDate gt %s" (x.ToString("yyyy-MM-dd"))
+                    | Some x -> lt "CreatedDate" (x.ToString("yyyy-MM-dd"))
                   match filter.ToCreatedDate with
                     | None -> ()
-                    | Some x -> sprintf "CreatedDate lt %s" (x.ToString("yyyy-MM-dd"))
+                    | Some x -> lt "CreatedDate" (x.ToString("yyyy-MM-dd"))
                 ])
               ]
               |> Query.generate
