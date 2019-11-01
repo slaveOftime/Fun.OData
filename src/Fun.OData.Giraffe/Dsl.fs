@@ -2,7 +2,6 @@ namespace Fun.OData.Giraffe
 
 open System
 open System.Linq
-open System.Collections.Generic
 open Microsoft.AspNet.OData
 open Microsoft.AspNet.OData.Query
 open Microsoft.AspNet.OData.Builder
@@ -35,6 +34,7 @@ module OData =
             ODataQuerySettings(
               EnsureStableOrdering = false,
               EnableConstantParameterization = true,
+              EnableCorrelatedSubqueryBuffering = true,
               PageSize = Nullable(20))
           configSettings |> List.iter (fun config -> config querySettings)
       
@@ -71,7 +71,7 @@ module OData =
           else json result nxt ctx
 
 
-  let queryFromService props (f: 'DbContext -> IEnumerable<'T>) =
+  let queryFromService props (f: 'DbContext -> IQueryable<'T>) =
       queryPro [
         yield! props
         ODataProp.GetData (fun ctx ->
@@ -85,9 +85,9 @@ module OData =
   /// Query only one item by id
   let item f id     = queryPro [ ODataProp.Filter (fun _ -> f id) ]
   /// Query data from DI service
-  let fromService (f: 'Service -> IEnumerable<'T>) = queryFromService [] f
+  let fromService (f: 'Service -> IQueryable<'T>) = queryFromService [] f
   /// Query only one item from DI service by id
-  let fromServicei (f: 'Service -> 'Id -> IEnumerable<'T>) id = queryFromService [ ODataProp.Filter (fun x -> x.Take(1)) ] (fun ctx -> f ctx id)
+  let fromServicei (f: 'Service -> 'Id -> IQueryable<'T>) id = queryFromService [ ODataProp.Filter (fun x -> x.Take(1)) ] (fun ctx -> f ctx id)
 
 
 type ODataQuery<'T when 'T: not struct>() =

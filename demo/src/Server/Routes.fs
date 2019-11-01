@@ -63,8 +63,8 @@ let configEntitSetCredential =
 let mainRoutes: HttpHandler =
     choose
         [
-            GET >=> routeCi  "/demo"      >=> OData.query demoData
-            GET >=> routeCif "/demo(%i)"     (OData.item (fun id -> demoData.Where(fun x -> x.Id = id)))
+            GET >=> routeCi  "/demo"      >=> OData.query (demoData.AsQueryable())
+            GET >=> routeCif "/demo(%i)"     (OData.item (fun id -> demoData.Where(fun x -> x.Id = id).AsQueryable()))
 
             GET >=> routeCi  "/demofluent"  >=> ODataQuery()
                                                   .configEntitySet(secureDemoData)
@@ -73,7 +73,7 @@ let mainRoutes: HttpHandler =
 
             GET >=> routeCif "/demofluent(%i)"  (fun id -> ODataQuery()
                                                               .configEntitySet(secureDemoData)
-                                                              .filter(fun _ -> demoData.Where(fun x -> x.Id = id))
+                                                              .filter(fun _ -> demoData.Where(fun x -> x.Id = id).AsQueryable())
                                                               .query())
 
             GET >=> routeCi  "/demopro"   >=> OData.queryPro [
@@ -81,13 +81,12 @@ let mainRoutes: HttpHandler =
                                                 ODataProp.Source (demoData.AsQueryable())
                                               ]
 
-            GET >=> routeCif "/demopro(%i)"  (fun id -> OData.queryPro
-                                                          [
-                                                            ODataProp.ConfigEntitySet secureDemoData
-                                                            ODataProp.Filter (fun _ -> demoData.Where(fun x -> x.Id = id))
-                                                          ])
+            GET >=> routeCif "/demopro(%i)"  (fun id -> OData.queryPro [
+                                                          ODataProp.ConfigEntitySet secureDemoData
+                                                          ODataProp.Filter (fun _ -> demoData.Where(fun x -> x.Id = id).AsQueryable())
+                                                        ])
 
-            GET >=> routeCi  "/person"     >=> OData.queryFromService [ configEntitSetCredential ] (fun (db: DemoDbContext) -> db.Persons.AsEnumerable())
-            GET >=> routeCi  "/personSvc"  >=> OData.fromService (fun (db: DemoDbContext) -> db.Persons.AsEnumerable())
-            GET >=> routeCif "/personSvc(%i)" (OData.fromServicei (fun (db: DemoDbContext) id -> db.Persons.Where(fun x -> x.Id = id).AsEnumerable()))
+            GET >=> routeCi  "/person"     >=> OData.queryFromService [ configEntitSetCredential ] (fun (db: DemoDbContext) -> db.Persons.AsQueryable())
+            GET >=> routeCi  "/personSvc"  >=> OData.fromService (fun (db: DemoDbContext) -> db.Persons.AsQueryable())
+            GET >=> routeCif "/personSvc(%i)" (OData.fromServicei (fun (db: DemoDbContext) id -> db.Persons.Where(fun x -> x.Id = id).AsQueryable()))
         ]

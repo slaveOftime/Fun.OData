@@ -17,7 +17,7 @@ type ODataResult =
 type ODataProp<'T when 'T: not struct> =
   | ConfigQuerySettings of (ODataQuerySettings -> unit)
   | ConfigEntitySet of (ODataConventionModelBuilder -> unit)
-  | GetData of (HttpContext -> IEnumerable<'T>)
-  | Source of IEnumerable<'T>
-  | Filter of (IEnumerable<'T> -> IEnumerable<'T>)
+  | GetData of (HttpContext -> IQueryable<'T>)
+  | Source of IQueryable<'T>
+  | Filter of (IQueryable<'T> -> IQueryable<'T>)
   | HttpContext of HttpContext
