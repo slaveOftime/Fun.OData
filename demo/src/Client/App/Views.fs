@@ -38,6 +38,16 @@ let app state dispatch =
               InputProp.ConvertTo InputValue.Date
             ]
 
+            field "QueryType" Form.selector [
+              SelectorProp.Label "Server query type"
+              SelectorProp.OnlyOne true
+              SelectorProp.Source [
+                QueryType.Simple, "Simple"
+                QueryType.Fluent, "Fluent"
+                QueryType.Pro, "Pro"
+              ]
+            ]
+
             button </> [
               Children [
                 str "Load Data"

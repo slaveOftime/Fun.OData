@@ -94,3 +94,14 @@ module OData =
   let ef (f: 'Service -> IEnumerable<'T>) = queryEF [] f
   /// Query only one item from DI service by id
   let efi (f: 'Service -> 'Id -> 'T) id   = queryEF [ ODataProp.ById (fun data -> data.FirstOrDefault()) ] (fun ctx -> [ f ctx id ].AsEnumerable())
+
+
+type ODataQuery<'T when 'T: not struct>() =
+  let mutable props: ODataProp<'T> list = []
+
+  member this.configQuerySettings config = props <- props@[ ODataProp.ConfigQuerySettings config ]; this
+  member this.configEntitySet config = props <- props@[ ODataProp.ConfigEntitySet config ]; this
+  member this.getData find = props <- props@[ ODataProp.GetData find ]; this
+  member this.withSource source = props <- props@[ ODataProp.Source source ]; this
+  member this.byId find = props <- props@[ ODataProp.ById find ]; this
+  member _.query() = OData.queryPro props

@@ -60,6 +60,15 @@ let mainRoutes: HttpHandler =
             GET >=> routeCi  "/demo"      >=> OData.query demoData
             GET >=> routeCif "/demo(%i)"     (OData.item (fun id -> demoData.FirstOrDefault(fun x -> x.Id = id)))
 
+            GET >=> routeCi  "/demofluent"  >=> ODataQuery()
+                                                  .withSource(demoData)
+                                                  .configEntitySet(ignorePrice).query()
+
+            GET >=> routeCif "/demofluent(%i)"  (fun id -> ODataQuery()
+                                                              .byId(fun _ -> demoData.FirstOrDefault(fun x -> x.Id = id))
+                                                              .configEntitySet(ignorePrice)
+                                                              .query())
+
             GET >=> routeCi  "/demopro"   >=> OData.queryPro [
                                                 ODataProp.Source demoData
                                                 ODataProp.ConfigEntitySet (fun builder -> builder.EntityType.Ignore(fun x -> x.Price))
@@ -68,7 +77,6 @@ let mainRoutes: HttpHandler =
             GET >=> routeCif "/demopro(%i)"  (fun id -> OData.queryPro
                                                           [
                                                             ODataProp.ConfigEntitySet (fun builder -> builder.EntityType.Ignore(fun x -> x.Price))
-                                                            ODataProp.ById (fun _ -> demoData.Where(fun x -> x.Id = id).FirstOrDefault())
+                                                            ODataProp.ById (fun _ -> demoData.FirstOrDefault(fun x -> x.Id = id))
                                                           ])
         ]
-

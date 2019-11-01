@@ -59,7 +59,7 @@ let update msg state =
                 IsLoading = true
                 ErrorInfo = None
                 ODataQuery = Some query }
-            , Http.request (sprintf "%s/demo%s" serverHost query)
+            , Http.request (sprintf "%s/%s%s" serverHost (QueryType.toQueryString filter.QueryType) query)
               |> Http.method GET
               |> handleHttpJsonAsync LoadedData (Some >> OnError)
               |> Cmd.OfAsync.result
@@ -75,23 +75,28 @@ let update msg state =
         , Cmd.none
 
     | LoadDataById id ->
-        let query =
-          [
-            Id (string id)
-            SelectType typeof<DemoData>
-            ExpandEx [
-              "Items", [ SelectType typeof<Item> ]
-            ]
-          ]
-          |> Query.generate
-        { state with
-            IsLoading = true
-            ErrorInfo = None
-            ODataQuery = Some query }
-        , Http.request (sprintf "%s/demo%s" serverHost query)
-          |> Http.method GET
-          |> handleHttpJsonAsync LoadedDataById (Some >> OnError)
-          |> Cmd.OfAsync.result
+        match state.FilterForm |> tryGenerateValueByForm<Filter> with
+        | Ok filter ->
+            let query =
+              [
+                Id (string id)
+                SelectType typeof<DemoData>
+                ExpandEx [
+                  "Items", [ SelectType typeof<Item> ]
+                ]
+              ]
+              |> Query.generate
+            { state with
+                IsLoading = true
+                ErrorInfo = None
+                ODataQuery = Some query }
+            , Http.request (sprintf "%s/%s%s" serverHost (QueryType.toQueryString filter.QueryType) query)
+              |> Http.method GET
+              |> handleHttpJsonAsync LoadedDataById (Some >> OnError)
+              |> Cmd.OfAsync.result
+        | Error e ->
+            state
+            , Cmd.ofMsg (e |> string |> Some |> OnError)
 
     | LoadedDataById data ->
         { state with
