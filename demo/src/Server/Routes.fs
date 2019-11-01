@@ -67,17 +67,18 @@ let mainRoutes: HttpHandler =
             GET >=> routeCif "/demo(%i)"     (OData.item (fun id -> demoData.Where(fun x -> x.Id = id).AsQueryable()))
 
             GET >=> routeCi  "/demofluent"  >=> ODataQuery()
+                                                  .configEntitySet(secureDemoData)
                                                   .source(demoData.AsQueryable())
-                                                  .configEntitySet(secureDemoData).query()
+                                                  .query()
 
             GET >=> routeCif "/demofluent(%i)"  (fun id -> ODataQuery()
-                                                              .filter(fun _ -> demoData.Where(fun x -> x.Id = id).AsQueryable())
                                                               .configEntitySet(secureDemoData)
+                                                              .filter(fun _ -> demoData.Where(fun x -> x.Id = id).AsQueryable())
                                                               .query())
 
             GET >=> routeCi  "/demopro"   >=> OData.queryPro [
-                                                ODataProp.Source (demoData.AsQueryable())
                                                 ODataProp.ConfigEntitySet secureDemoData
+                                                ODataProp.Source (demoData.AsQueryable())
                                               ]
 
             GET >=> routeCif "/demopro(%i)"  (fun id -> OData.queryPro
