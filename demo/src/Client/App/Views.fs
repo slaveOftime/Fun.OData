@@ -13,6 +13,12 @@ type Fa = CssClasses<"./public/css/font-awesome-v5-10-2.min.css", Naming.Verbati
 let app state dispatch =
     let field key renderF renderArgs = Form.field state.FilterForm (FilterFormMsg >> dispatch) key (renderF renderArgs)
     div </> [
+      Classes [
+        Tw.``sm:w-full``
+        Tw.``md:w-03/04``
+        Tw.``lg:w-02/03``
+        Tw.``mx-auto``
+      ]
       Children [
         div </> [
           Children [
@@ -97,7 +103,7 @@ let app state dispatch =
               div </> [
                 Children [
                   div </> [ Text "OData query:" ]
-                  div </> [ Text q ]
+                  div </> [ Text q; Classes [ Tw.``break-words`` ] ]
                 ]
                 Classes [
                   Tw.``m-02``
