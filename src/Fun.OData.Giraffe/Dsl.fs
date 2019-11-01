@@ -18,9 +18,9 @@ module OData =
       | Some ctx ->
           let configEntitySet = props |> List.choose (function ODataProp.ConfigEntitySet x -> Some x | _ -> None)
           let configSettings  = props |> List.choose (function ODataProp.ConfigQuerySettings x -> Some x | _ -> None)
-          let getData         = props |> List.choose (function ODataProp.GetData x -> Some x | _ -> None) |> List.tryLast
+          let getData         = props |> List.choose (function ODataProp.GetFromContext x -> Some x | _ -> None) |> List.tryLast
           let source          = props |> List.choose (function ODataProp.Source x -> Some x | _ -> None) |> Seq.concat
-          let byId            = props |> List.choose (function ODataProp.Filter x -> Some x | _ -> None) |> List.tryLast
+          let byId            = props |> List.choose (function ODataProp.Single x -> Some x | _ -> None) |> List.tryLast
 
           let modelbuilder = ODataConventionModelBuilder(ctx.Request.HttpContext.RequestServices, isQueryCompositionMode = true)
           modelbuilder.EntitySet<'T>(entityClrType.Name) |> ignore
@@ -64,30 +64,39 @@ module OData =
   let queryPro props: HttpHandler =
       fun nxt ctx ->
           let result = getODataResult [ yield! props; ODataProp.HttpContext ctx ]
-          let isById = props |> List.exists (function ODataProp.Filter _ -> true | _ -> false)
+          let isById = props |> List.exists (function ODataProp.Single _ -> true | _ -> false)
           if isById then
             let temp = result.Value.Cast<_>().FirstOrDefault()
             json temp nxt ctx
           else json result nxt ctx
 
 
-  let queryFromService props (f: 'DbContext -> IQueryable<'T>) =
+  let fromServicePro (f: 'DbContext -> IQueryable<'T>) props =
       queryPro [
         yield! props
-        ODataProp.GetData (fun ctx ->
+        ODataProp.GetFromContext (fun ctx ->
           let db = ctx.GetService<'DbContext>()
           f db)
+      ]
+
+  let fromServiceProi (f: 'DbContext -> 'Id -> IQueryable<'T>) props id =
+      queryPro [
+        yield! props
+        ODataProp.GetFromContext (fun ctx ->
+          let db = ctx.GetService<'DbContext>()
+          f db id)
+        ODataProp.Single (fun x -> x)
       ]
 
 
   /// Query data from sequence
   let query source  = queryPro [ ODataProp.Source source ]
   /// Query only one item by id
-  let item f id     = queryPro [ ODataProp.Filter (fun _ -> f id) ]
+  let item f id     = queryPro [ ODataProp.Single (fun _ -> f id) ]
   /// Query data from DI service
-  let fromService (f: 'Service -> IQueryable<'T>) = queryFromService [] f
+  let fromService (f: 'Service -> IQueryable<'T>) = fromServicePro f []
   /// Query only one item from DI service by id
-  let fromServicei (f: 'Service -> 'Id -> IQueryable<'T>) id = queryFromService [ ODataProp.Filter (fun x -> x.Take(1)) ] (fun ctx -> f ctx id)
+  let fromServicei (f: 'Service -> 'Id -> IQueryable<'T>) id = fromServicePro (fun ctx -> f ctx id) [ ODataProp.Single (fun x -> x.Take(1)) ]
 
 
 type ODataQuery<'T when 'T: not struct>() =
@@ -95,7 +104,8 @@ type ODataQuery<'T when 'T: not struct>() =
 
   member this.configQuerySettings config = props <- props@[ ODataProp.ConfigQuerySettings config ]; this
   member this.configEntitySet config = props <- props@[ ODataProp.ConfigEntitySet config ]; this
-  member this.fromService find = props <- props@[ ODataProp.GetData find ]; this
+  member this.fromContext find = props <- props@[ ODataProp.GetFromContext find ]; this
+  member this.fromService<'Service> find = props <- props@[ ODataProp.GetFromContext (fun ctx -> ctx.GetService<'Service>() |> find) ]; this
   member this.source source = props <- props@[ ODataProp.Source source ]; this
-  member this.filter find = props <- props@[ ODataProp.Filter find ]; this
+  member this.single find = props <- props@[ ODataProp.Single find ]; this
   member _.query() = OData.queryPro props
