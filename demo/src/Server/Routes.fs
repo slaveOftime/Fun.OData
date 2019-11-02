@@ -51,11 +51,15 @@ let demoData =
 
 
 let configDemoData (builder: ODataConventionModelBuilder) =
-    builder.EntitySet<DemoData>("DemoData").EntityType.Ignore(fun x -> x.Price)
+    builder
+      .SetEntityType<DemoData>(fun ty -> ty.Ignore(fun x -> x.Price))
+    |> ignore
 
 let configRole (builder: ODataConventionModelBuilder) =
-    //builder.EntitySet<Person>("Person").EntityType.Ignore(fun x -> x.Roles)
-    builder.EntitySet<Role>("Role").EntityType.Ignore(fun x -> x.Credential)
+    builder
+      //.SetEntityType<Person>(fun ty -> ty.Ignore(fun x -> x.Roles))
+      .SetEntityType<Role>(fun ty -> ty.Ignore(fun x -> x.Credential))
+    |> ignore
 
 
 let mainRoutes: HttpHandler =
@@ -64,14 +68,14 @@ let mainRoutes: HttpHandler =
         GET >=> routeCif "/demo(%i)"                     (OData.item  (fun id -> demoData.Where(fun x -> x.Id = id).AsQueryable()))
         GET >=> routeCi  "/demopro"                   >=> OData.queryPro [ ODataProp.Source (demoData.AsQueryable()); ODataProp.ConfigEntitySet configDemoData; ]
         GET >=> routeCif "/demopro(%i)"        (fun id -> OData.queryPro [ ODataProp.Single (fun _ -> demoData.Where(fun x -> x.Id = id).AsQueryable()); ODataProp.ConfigEntitySet configDemoData ])
-        GET >=> routeCi  "/demofluent"                >=> ODataQuery().source(demoData.AsQueryable()).configEntitySet(configDemoData).query()
-        GET >=> routeCif "/demofluent(%i)"     (fun id -> ODataQuery().single(fun _ -> demoData.Where(fun x -> x.Id = id).AsQueryable()).configEntitySet(configDemoData).query())
+        GET >=> routeCi  "/demofluent"                >=> ODataQuery().Source(demoData.AsQueryable()).ConfigEntitySet(configDemoData).Build()
+        GET >=> routeCif "/demofluent(%i)"     (fun id -> ODataQuery().Single(fun _ -> demoData.Where(fun x -> x.Id = id).AsQueryable()).ConfigEntitySet(configDemoData).Build())
 
         GET >=> routeCi  "/person"                    >=> OData.fromService     (fun (db: DemoDbContext) -> db.Persons.AsQueryable())
         GET >=> routeCif "/person(%i)"                   (OData.fromServicei    (fun (db: DemoDbContext) id -> db.Persons.Where(fun x -> x.Id = id).AsQueryable()))
         GET >=> routeCi  "/personpro"                 >=> OData.fromServicePro  (fun (db: DemoDbContext) -> db.Persons.AsQueryable()) [ ODataProp.ConfigEntitySet configRole ]
         GET >=> routeCif "/personpro(%i)"                (OData.fromServiceProi (fun (db: DemoDbContext) id -> db.Persons.Where(fun x -> x.Id = id).AsQueryable()) [ ODataProp.ConfigEntitySet configRole ])
-        GET >=> routeCi  "/personfluent"              >=> ODataQuery().fromService<DemoDbContext>(fun db -> db.Persons.AsQueryable()).configEntitySet(configRole).query()
-        GET >=> routeCif "/personfluent(%i)"   (fun id -> ODataQuery().fromService<DemoDbContext>(fun db -> db.Persons.AsQueryable()).single(fun x -> x.Where(fun x -> x.Id = id)).configEntitySet(configRole).query())
+        GET >=> routeCi  "/personfluent"              >=> ODataQuery().FromService<DemoDbContext>(fun db -> db.Persons.AsQueryable()).ConfigEntitySet(configRole).Build()
+        GET >=> routeCif "/personfluent(%i)"   (fun id -> ODataQuery().FromService<DemoDbContext>(fun db -> db.Persons.AsQueryable()).Single(fun x -> x.Where(fun x -> x.Id = id)).ConfigEntitySet(configRole).Build())
     ]
      

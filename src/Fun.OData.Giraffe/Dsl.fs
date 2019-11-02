@@ -9,6 +9,14 @@ open Microsoft.AspNet.OData.Extensions
 open Giraffe
 
 
+[<AutoOpen>]
+module Extensions =
+  type ODataConventionModelBuilder with
+    member builder.SetEntityType<'T when 'T: not struct> setter =
+      builder.EntitySet<'T>(typeof<'T>.Name).EntityType |> setter
+      builder
+
+
 module OData =
   let getODataResult<'T when 'T: not struct> (props: ODataProp<'T> list) =
       let entityClrType = typeof<'T>
@@ -102,10 +110,10 @@ module OData =
 type ODataQuery<'T when 'T: not struct>() =
   let mutable props: ODataProp<'T> list = []
 
-  member this.configQuerySettings config = props <- props@[ ODataProp.ConfigQuerySettings config ]; this
-  member this.configEntitySet config = props <- props@[ ODataProp.ConfigEntitySet config ]; this
-  member this.fromContext find = props <- props@[ ODataProp.GetFromContext find ]; this
-  member this.fromService<'Service> find = props <- props@[ ODataProp.GetFromContext (fun ctx -> ctx.GetService<'Service>() |> find) ]; this
-  member this.source source = props <- props@[ ODataProp.Source source ]; this
-  member this.single find = props <- props@[ ODataProp.Single find ]; this
-  member _.query() = OData.queryPro props
+  member this.ConfigQuerySettings config = props <- props@[ ODataProp.ConfigQuerySettings config ]; this
+  member this.ConfigEntitySet config = props <- props@[ ODataProp.ConfigEntitySet config ]; this
+  member this.FromContext find = props <- props@[ ODataProp.GetFromContext find ]; this
+  member this.FromService<'Service> find = props <- props@[ ODataProp.GetFromContext (fun ctx -> ctx.GetService<'Service>() |> find) ]; this
+  member this.Source source = props <- props@[ ODataProp.Source source ]; this
+  member this.Single find = props <- props@[ ODataProp.Single find ]; this
+  member _.Build() = OData.queryPro props
