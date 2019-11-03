@@ -9,7 +9,7 @@ module Fun.OData.Query.Filter
     let andQueries filters = combineFilter "and" filters
     let orQueries  filters = combineFilter "or" filters
 
-    let gt name value       = sprintf "%s gt %A" name value
-    let lt name value       = sprintf "%s lt %A" name value
-    let eq name value       = sprintf "%s eq %A" name value
+    let gt name value       = sprintf "%s gt %s" name (string value)
+    let lt name value       = sprintf "%s lt %s" name (string value)
+    let eq name value       = sprintf "%s eq %s" name (string value)
     let contains name value = sprintf "contains(%s, '%s')" name value
