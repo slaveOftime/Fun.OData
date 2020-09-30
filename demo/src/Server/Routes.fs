@@ -72,8 +72,14 @@ let mainRoutes: HttpHandler =
 
         GET >=> routeCi  "/demo/serilization"         >=> OData.queryPro [
                                                             ODataProp.Source ([ for i in 1..10 -> {| Id = i |} ].AsQueryable())
-                                                            ODataProp.ToJson (customerToJson)
+                                                            ODataProp.ToJson customerToJson
                                                           ]
+
+        GET >=> routeCif "/demo/serilization/%i"         (fun id -> OData.queryPro [
+                                                            ODataProp.Source ([ for i in 1..10 -> {| Id = i |} ].AsQueryable())
+                                                            ODataProp.Single (fun x -> x.Where(fun x -> x.Id = id))
+                                                            ODataProp.ToJson customerToJson
+                                                          ])
 
         GET >=> routeCif "/demo(%i)"                     (OData.item  (fun id -> demoData.Where(fun x -> x.Id = id).AsQueryable()))
         GET >=> routeCi  "/demopro"                   >=> OData.queryPro [ ODataProp.Source (demoData.AsQueryable()); ODataProp.ConfigEntitySet configDemoData; ]

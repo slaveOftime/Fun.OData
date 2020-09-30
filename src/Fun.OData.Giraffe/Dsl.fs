@@ -76,7 +76,7 @@ module OData =
           let result = getODataResult [ yield! props; ODataProp.HttpContext ctx ]
           let isById = props |> List.exists (function ODataProp.Single _ -> true | _ -> false)
 
-          let buildResult data =
+          let buildResult (data: obj) =
               match toJson with
               | None -> json data nxt ctx
               | Some toJson ->
