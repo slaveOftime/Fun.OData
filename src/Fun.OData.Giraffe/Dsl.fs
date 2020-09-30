@@ -45,7 +45,8 @@ module OData =
               EnableCorrelatedSubqueryBuffering = true,
               PageSize = Nullable(20))
           configSettings |> List.iter (fun config -> config querySettings)
-      
+
+          
           let result =
             match getData with
             | None -> source.AsQueryable()
@@ -71,12 +72,20 @@ module OData =
 
   let queryPro props: HttpHandler =
       fun nxt ctx ->
+          let toJson = props |> List.choose (function ODataProp.ToJson x -> Some x | _ -> None) |> List.tryLast
           let result = getODataResult [ yield! props; ODataProp.HttpContext ctx ]
           let isById = props |> List.exists (function ODataProp.Single _ -> true | _ -> false)
-          if isById then
-            let temp = result.Value.Cast<_>().FirstOrDefault()
-            json temp nxt ctx
-          else json result nxt ctx
+
+          let buildResult data =
+              match toJson with
+              | None -> json data nxt ctx
+              | Some toJson ->
+                  ctx.SetHttpHeader "content-type" "application/json; charset=utf-8"
+                  ctx.WriteStringAsync(toJson data).Result |> ignore
+                  nxt ctx
+
+          if isById then result.Value.Cast<_>().FirstOrDefault() |> buildResult
+          else buildResult result
 
 
   let fromServicePro (f: 'DbContext -> IQueryable<'T>) props =

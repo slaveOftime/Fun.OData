@@ -5,8 +5,8 @@ open System.Linq
 open Microsoft.AspNetCore
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
-open Microsoft.Extensions.DependencyInjection
 open Microsoft.AspNet.OData.Extensions
+open Microsoft.Extensions.DependencyInjection
 open Giraffe
 open Giraffe.Serialization.Json
 open Db
@@ -27,14 +27,18 @@ let main args =
   WebHost
     .CreateDefaultBuilder()
     .CaptureStartupErrors(true)
-    .Configure(fun app ->
-        app.ApplicationServices.CreateScope().ServiceProvider.GetService<DemoDbContext>() |> seedDb
-        app
+    .Configure(fun application ->
+        application.ApplicationServices.CreateScope().ServiceProvider.GetService<DemoDbContext>() |> seedDb
+        application
           .UseCors(fun op -> op.AllowAnyOrigin() |> ignore)
-          .UseMvc(fun op -> op.EnableDependencyInjection())
-          .UseGiraffe Routes.mainRoutes)
+          .UseRouting() |> ignore
+        application
+          .UseGiraffe(Routes.mainRoutes) |> ignore
+        application
+          .UseEndpoints(fun builder ->
+              builder.EnableDependencyInjection() |> ignore) |> ignore)
     .ConfigureServices(fun services ->
-        services.AddMvc() |> ignore
+        services.AddCors() |> ignore
         services.AddOData() |> ignore
         services.AddGiraffe() |> ignore
         services.AddDbContext<DemoDbContext>() |> ignore

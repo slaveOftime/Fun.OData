@@ -20,3 +20,4 @@ type ODataProp<'T when 'T: not struct> =
   | GetFromContext of (HttpContext -> IQueryable<'T>)
   | Source of IQueryable<'T>
   | Single of (IQueryable<'T> -> IQueryable<'T>)
+  | ToJson of (obj -> string)
