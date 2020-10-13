@@ -29,6 +29,7 @@ module OData =
           let getData         = props |> List.choose (function ODataProp.GetFromContext x -> Some x | _ -> None) |> List.tryLast
           let source          = props |> List.choose (function ODataProp.Source x -> Some x | _ -> None) |> Seq.concat
           let byId            = props |> List.choose (function ODataProp.Single x -> Some x | _ -> None) |> List.tryLast
+          let withCount       = props |> List.choose (function ODataProp.WithCount x -> Some x | _ -> None) |> List.tryLast
 
           let modelbuilder = ODataConventionModelBuilder(ctx.Request.HttpContext.RequestServices, isQueryCompositionMode = true)
           modelbuilder.EntitySet<'T>(entityClrType.Name) |> ignore
@@ -63,7 +64,11 @@ module OData =
                   if queryOption.Filter <> null 
                   then queryOption.Filter.ApplyTo(finalResult, querySettings).Cast()
                   else finalResult
-              { Count = queryOption.Count.GetEntityCount(filterResult)
+              let count =
+                  match withCount with
+                  | Some x -> Nullable x
+                  | None -> queryOption.Count.GetEntityCount(filterResult)
+              { Count = count
                 Value = value }
           else 
               { Count = Nullable()

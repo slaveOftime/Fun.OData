@@ -21,3 +21,5 @@ type ODataProp<'T when 'T: not struct> =
   | Source of IQueryable<'T>
   | Single of (IQueryable<'T> -> IQueryable<'T>)
   | ToJson of (obj -> string)
+  | WithCount of int64
+   
