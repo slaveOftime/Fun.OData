@@ -2,6 +2,7 @@ module Server.Serializer
 
 open Newtonsoft.Json
 open System.Threading.Tasks
+open Fun.OData.Giraffe
 
 let Utf8EncodingWithoutBom = System.Text.UTF8Encoding(false)
 let DefaultBufferSize = 1024
@@ -39,3 +40,9 @@ type FSharpLuJsonSerializer () =
             use jsonTextReader = new JsonTextReader(streamReader)
             serializer.Deserialize<'T>(jsonTextReader)
             |> Task.FromResult
+
+
+type ODataSerializer () =
+    interface IODataSerializer with
+        member _.SerializeToString data =
+            JsonConvert.SerializeObject(data, Formatting, Settings)

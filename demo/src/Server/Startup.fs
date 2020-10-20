@@ -9,6 +9,7 @@ open Microsoft.AspNet.OData.Extensions
 open Microsoft.Extensions.DependencyInjection
 open Giraffe
 open Giraffe.Serialization.Json
+open Fun.OData.Giraffe
 open Db
 
 
@@ -24,27 +25,29 @@ let seedDb (db: DemoDbContext) =
 
 [<EntryPoint>]
 let main args =
-  WebHost
-    .CreateDefaultBuilder()
-    .CaptureStartupErrors(true)
-    .Configure(fun application ->
-        application.ApplicationServices.CreateScope().ServiceProvider.GetService<DemoDbContext>() |> seedDb
-        application
-          .UseCors(fun op -> op.AllowAnyOrigin() |> ignore)
-          .UseRouting() |> ignore
-        application
-          .UseGiraffe(Routes.mainRoutes) |> ignore
-        application
-          .UseEndpoints(fun builder ->
-              builder.EnableDependencyInjection() |> ignore) |> ignore)
-    .ConfigureServices(fun services ->
-        services.AddCors() |> ignore
-        services.AddOData() |> ignore
-        services.AddGiraffe() |> ignore
-        services.AddDbContext<DemoDbContext>() |> ignore
-        services.AddSingleton<IJsonSerializer>(Serializer.FSharpLuJsonSerializer()) |> ignore)
-    .UseUrls("http://localhost:5000")
-    .UseIISIntegration()
-    .Build()
-    .Run()
-  1
+    WebHost
+      .CreateDefaultBuilder()
+      .CaptureStartupErrors(true)
+      .Configure(fun application ->
+          application.ApplicationServices.CreateScope().ServiceProvider.GetService<DemoDbContext>() |> seedDb
+          application
+            .UseCors(fun op -> op.AllowAnyOrigin() |> ignore)
+            .UseRouting() |> ignore
+          application
+            .UseGiraffe(Routes.mainRoutes) |> ignore
+          application
+            .UseEndpoints(fun builder ->
+                builder.EnableDependencyInjection() |> ignore) |> ignore)
+      .ConfigureServices(fun services ->
+          services.AddCors() |> ignore
+          services.AddOData() |> ignore
+          services.AddGiraffe() |> ignore
+          services.AddDbContext<DemoDbContext>() |> ignore
+          services
+              .AddSingleton<IJsonSerializer>(Serializer.FSharpLuJsonSerializer())
+              .AddSingleton<IODataSerializer>(Serializer.ODataSerializer()) |> ignore)
+      .UseUrls("http://localhost:5000")
+      .UseIISIntegration()
+      .Build()
+      .Run()
+    1

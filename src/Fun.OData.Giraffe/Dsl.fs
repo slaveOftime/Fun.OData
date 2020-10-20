@@ -81,12 +81,25 @@ module OData =
           let result = getODataResult [ yield! props; ODataProp.HttpContext ctx ]
           let isById = props |> List.exists (function ODataProp.Single _ -> true | _ -> false)
 
+          let writeJsonContent content =
+              ctx.SetHttpHeader "content-type" "application/json; charset=utf-8"
+              ctx.WriteStringAsync(content).Result |> ignore
+
           let buildResult (data: obj) =
               match toJson with
-              | None -> json data nxt ctx
+              | None ->
+                  try
+                      let serializer = ctx.GetService<IODataSerializer>()
+                      writeJsonContent (serializer.SerializeToString data)
+                      nxt ctx
+                  with
+                  | :? MissingDependencyException ->
+                      json data nxt ctx
+                  | e ->
+                      raise e
+
               | Some toJson ->
-                  ctx.SetHttpHeader "content-type" "application/json; charset=utf-8"
-                  ctx.WriteStringAsync(toJson data).Result |> ignore
+                  writeJsonContent (toJson data)
                   nxt ctx
 
           if isById then result.Value.Cast<_>().FirstOrDefault() |> buildResult
