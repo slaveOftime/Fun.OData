@@ -24,7 +24,7 @@ jobs:
     - name: Packs
       run: |
         dotnet pack src/Fun.OData.Giraffe/Fun.OData.Giraffe.fsproj -c Release -o artifacts --no-restore /p:Version=${{ github.event.release.tag_name }}
-        dotnet pack src/Fun.OData.Giraffe/Fun.OData.Query.fsproj -c Release -o artifacts --no-restore /p:Version=${{ github.event.release.tag_name }}
+        dotnet pack src/Fun.OData.Query/Fun.OData.Query.fsproj -c Release -o artifacts --no-restore /p:Version=${{ github.event.release.tag_name }}
 
     - name: Publish
       run: dotnet nuget push artifacts/*.nupkg --skip-duplicate -k ${{secrets.NUGET_API_KEY}}    
