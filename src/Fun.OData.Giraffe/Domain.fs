@@ -16,6 +16,7 @@ type ODataResult =
 type ODataProp<'T when 'T: not struct> =
     | ConfigQuerySettings of (ODataQuerySettings -> unit)
     | ConfigEntitySet of (ODataConventionModelBuilder -> unit)
+    | UseGlobalEdmModel
     | HttpContext of HttpContext
     | GetFromContext of (HttpContext -> IQueryable<'T>)
     | Source of IQueryable<'T>
@@ -26,3 +27,7 @@ type ODataProp<'T when 'T: not struct> =
 
 type IODataSerializer =
     abstract member SerializeToString: obj -> string
+
+
+type DefaultODataOptions = 
+    { UseGlobalEdmModel: bool }

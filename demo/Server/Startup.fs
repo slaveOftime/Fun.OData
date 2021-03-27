@@ -5,12 +5,15 @@ open System.Linq
 open Microsoft.AspNetCore
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
+open Microsoft.AspNet.OData.Builder
 open Microsoft.AspNet.OData.Extensions
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.OData.Edm
 open Giraffe
 open Giraffe.Serialization.Json
 open Fun.OData.Giraffe
 open Db
+open Dtos.DemoData
 
 
 let seedDb (db: DemoDbContext) =
@@ -21,6 +24,21 @@ let seedDb (db: DemoDbContext) =
       db.Persons.Add(Person(Name = "p2", CreatedDate = DateTime.Now, Roles = [ Role(Caption = "Admin", Credential = "2423") ].ToList())) |> ignore
       db.Persons.Add(Person(Name = "p3", CreatedDate = DateTime.Now, Roles = [ Role(Caption = "Guest", Credential = "1234") ].ToList())) |> ignore
       db.SaveChanges() |> ignore
+
+
+let getEdmModel (sp: IServiceProvider) =
+    let builder = ODataConventionModelBuilder(sp, true)
+    builder.EntitySet<Person>(typeof<Person>.Name) |> ignore
+    builder
+        .EntitySet<Role>(typeof<Role>.Name).EntityType
+        .Ignore(fun x -> x.Credential) 
+        |> ignore
+    builder
+        .EntitySet<DemoData>(typeof<DemoData>.Name).EntityType
+        .HasKey(fun x -> x.Id)
+        //.Ignore(fun x -> x.Price)
+        |> ignore
+    builder.GetEdmModel()
 
 
 [<EntryPoint>]
@@ -42,6 +60,8 @@ let main args =
           services.AddCors() |> ignore
           services.AddOData() |> ignore
           services.AddGiraffe() |> ignore
+          services.AddSingleton({ DefaultODataOptions.UseGlobalEdmModel = true }) |> ignore
+          services.AddSingleton<IEdmModel>(getEdmModel) |> ignore
           services.AddDbContext<DemoDbContext>() |> ignore
           services
               .AddSingleton<IJsonSerializer>(Serializer.FSharpLuJsonSerializer())
