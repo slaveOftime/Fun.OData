@@ -60,7 +60,7 @@ let main args =
           services.AddCors() |> ignore
           services.AddOData() |> ignore
           services.AddGiraffe() |> ignore
-          services.AddSingleton({ DefaultODataOptions.UseGlobalEdmModel = true }) |> ignore
+          services.AddSingleton({ DefaultODataOptions.DefaultValue with UseGlobalEdmModel = true; ForceSelect = true }) |> ignore
           services.AddSingleton<IEdmModel>(getEdmModel) |> ignore
           services.AddDbContext<DemoDbContext>() |> ignore
           services

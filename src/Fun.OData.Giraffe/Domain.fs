@@ -30,4 +30,8 @@ type IODataSerializer =
 
 
 type DefaultODataOptions = 
-    { UseGlobalEdmModel: bool }
+    { UseGlobalEdmModel: bool
+      ForceSelect: bool }
+    static member DefaultValue = 
+        { UseGlobalEdmModel = false
+          ForceSelect = false }

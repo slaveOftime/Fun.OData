@@ -26,14 +26,14 @@ module OData =
         | Some ctx ->
             let entityClrType = typeof<'T>
 
+            let defaultOptions =
+                try ctx.GetService<DefaultODataOptions>()
+                with _ -> DefaultODataOptions.DefaultValue
+
             let props =
-                try
-                    let options = ctx.GetService<DefaultODataOptions>()
-                    if options.UseGlobalEdmModel then
-                        ODataProp.UseGlobalEdmModel::props
-                    else
-                        props
-                with _ ->
+                if defaultOptions.UseGlobalEdmModel then
+                    ODataProp.UseGlobalEdmModel::props
+                else
                     props
 
             let configSettings    = props |> List.choose (function ODataProp.ConfigQuerySettings x -> Some x | _ -> None)
@@ -59,6 +59,9 @@ module OData =
 
             let modelContext = ODataQueryContext(model, entityClrType, ctx.Request.ODataFeature().Path)
             let queryOption = ODataQueryOptions<'T>(modelContext, ctx.Request)
+
+            if defaultOptions.ForceSelect && (queryOption.SelectExpand = null || queryOption.SelectExpand.SelectExpandClause.AllSelected) then
+                failwith "$select is required"
       
             let querySettings =
                 ODataQuerySettings(
