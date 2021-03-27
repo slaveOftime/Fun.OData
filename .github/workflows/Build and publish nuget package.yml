@@ -21,9 +21,6 @@ jobs:
     - name: Install dependencies
       run: dotnet restore
 
-    - name: Build
-      run: dotnet build --configuration Release --no-restore
-
     - name: Packs
       run: |
         dotnet pack src/Fun.OData.Giraffe/Fun.OData.Giraffe.fsproj -c Release -o artifacts --no-restore /p:Version=${{ github.event.release.tag_name }}
