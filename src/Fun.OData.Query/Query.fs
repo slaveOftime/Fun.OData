@@ -22,6 +22,12 @@ type Query =
     | Id of string
 
 
+type FSharpType =  
+    static member IsRecordArray (ty: Type) = ty.IsArray && FSharpType.IsRecord ty.GenericTypeArguments.[0]
+    static member IsRecordList (ty: Type) = ty.FullName.StartsWith "Microsoft.FSharp.Collections.FSharpList" && FSharpType.IsRecord ty.GenericTypeArguments.[0]
+    static member IsRecordOption (ty: Type) = ty.FullName.StartsWith "Microsoft.FSharp.Core.FSharpOption" && FSharpType.IsRecord ty.GenericTypeArguments.[0]
+
+
 module Query =
 
     let generateSelectQueryByType lowerFirstCase sourceType  =
@@ -87,15 +93,49 @@ module Query =
         |> String.concat spliter
           
     
-    let generate qs =
-        qs 
+    let generate quries =
+        quries 
         |> List.tryPick (function 
             | Id x -> Some ("(" + string x + ")")
             | _ -> None)
         |> Option.defaultValue ""
-        |> fun x -> x + "?" + combineQuery "&" qs
+        |> fun x -> x + "?" + combineQuery "&" quries
 
 
-    let inline generateFor<'T> qs =
-        let select = generateSelectQuery<'T> () |> Select
-        generate (qs@[select])
+    // This will generate selected fields and expan nexted field according to the record structure
+    let inline generateFor<'T> quries =
+        let rec loop (ty: Type): Query option =
+            FSharpType.GetRecordFields ty
+            |> Array.choose (fun x ->
+                if FSharpType.IsRecord x.PropertyType then
+                    Some (x.Name, x.PropertyType)
+                elif FSharpType.IsRecordArray x.PropertyType
+                    || FSharpType.IsRecordList x.PropertyType
+                    || FSharpType.IsRecordOption x.PropertyType
+                then
+                    Some (x.Name, x.PropertyType.GenericTypeArguments.[0])
+                else
+                    None)
+            |> Array.fold
+                (fun state (name, ty) ->
+                    state@[
+                        name, [ 
+                            SelectType ty
+                            match loop ty with
+                            | Some x -> x
+                            | None -> ()
+                        ]
+                    ])
+                []
+            |> function
+                | [] -> None
+                | x -> Some (ExpandEx x)
+
+        [
+            generateSelectQuery<'T> () |> Select
+            match loop typeof<'T> with
+            | Some x -> x
+            | None -> ()
+        ]
+        @ quries
+        |> generate

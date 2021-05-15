@@ -44,3 +44,15 @@ let query =
     
 Http.get (sprintf "%s/demo%s" serverHost query)
 ```
+
+With Query.generateFor some type, you can get SelectType and ExpandEx automatically. It supports expand record, record of array, record of list and record of option.
+```fsharp
+Query.generateFor<
+                {| Id: int
+                   Name: string
+                   Test1: {| Id: Guid; Name: string; DemoData: DemoData |}
+                   Test2: {| Id: Guid; Name: string |} option
+                   Test3: {| Id: int |} []
+                   Test4: {| Id: int |} list |}> []
+// ?$expand=Test1($expand=DemoData($expand=Items($select=Id,Name,CreatedDate);$select=Id,Name,Description,Price,Items,CreatedDate,LastModifiedDate);$select=DemoData,Id,Name),Test2($select=Id,Name),Test3($select=Id),Test4($select=Id)&$select=Id,Name,Test1,Test2,Test3,Test4
+```

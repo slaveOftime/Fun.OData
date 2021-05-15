@@ -1,5 +1,6 @@
 module Client.App.States
 
+open System
 open Elmish
 open Fable.SimpleHttp
 open Fun.Result
@@ -68,15 +69,19 @@ let update msg state =
         , Cmd.none
 
     | LoadDataById id ->
-        let query =
-            [
-                Id (string id)
-                SelectType typeof<DemoData>
-                ExpandEx [
-                    "Items", [ SelectType typeof<Item> ]
-                ]
-            ]
-            |> Query.generate
+        let expected = "?$expand=Test1($expand=DemoData($expand=Items($select=Id,Name,CreatedDate);$select=Id,Name,Description,Price,Items,CreatedDate,LastModifiedDate);$select=DemoData,Id,Name),Test2($select=Id,Name),Test3($select=Id),Test4($select=Id)&$select=Id,Name,Test1,Test2,Test3,Test4"
+        let actual =
+            Query.generateFor<
+                {| Id: int
+                   Name: string
+                   Test1: {| Id: Guid; Name: string; DemoData: DemoData |}
+                   Test2: {| Id: Guid; Name: string |} option
+                   Test3: {| Id: int |} []
+                   Test4: {| Id: int |} list |}> []
+        if expected <> actual then
+            Browser.Dom.console.error $"Query.generateFor is not working.\nExpected:{expected}\nActual: {actual}"
+
+        let query = [ Id (string id) ] |> Query.generateFor<DemoData>
         { state with
             IsLoading = true
             ErrorInfo = None
