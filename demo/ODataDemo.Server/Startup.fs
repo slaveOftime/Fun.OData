@@ -10,6 +10,7 @@ open Microsoft.AspNetCore.OData
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.OpenApi.Models
+open ODataDemo.Db
 open ODataDemo.Server
 
 
@@ -34,19 +35,19 @@ services.AddSwaggerGen(fun options ->
     options.OperationFilter<OpenApiOperationIgnoreFilter>() |> ignore
 )
 
-services.AddDbContext<Db.DemoDbContext>() |> ignore
+services.AddDbContext<DemoDbContext>() |> ignore
 
 
 let app = builder.Build()
 
 
-let db = app.Services.CreateScope().ServiceProvider.GetService<Db.DemoDbContext>()
+let db = app.Services.CreateScope().ServiceProvider.GetService<DemoDbContext>()
 db.Database.EnsureCreated() |> ignore
 
-if db.Persons.Any() |> not then
-    db.Persons.Add(Db.Person(Name = "p1", CreatedDate = DateTime.Now, Roles = [ Db.Role(Caption = "Admin", Credential = "2423") ].ToList()))
-    db.Persons.Add(Db.Person(Name = "p2", CreatedDate = DateTime.Now, Roles = [ Db.Role(Caption = "Admin", Credential = "2423") ].ToList()))
-    db.Persons.Add(Db.Person(Name = "p3", CreatedDate = DateTime.Now, Roles = [ Db.Role(Caption = "Guest", Credential = "1234") ].ToList()))
+if db.Users.Any() |> not then
+    db.Users.Add(User(Name = "p1", CreatedDate = DateTime.Now, Roles = [ Role(Caption = "Admin", Credential = "2423") ].ToList()))
+    db.Users.Add(User(Name = "p2", CreatedDate = DateTime.Now, Roles = [ Role(Caption = "Admin", Credential = "2423") ].ToList()))
+    db.Users.Add(User(Name = "p3", CreatedDate = DateTime.Now, Roles = [ Role(Caption = "Guest", Credential = "1234") ].ToList()))
     db.SaveChanges() |> ignore
 
 

@@ -18,7 +18,7 @@
 		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.3.1" />
 	</ItemGroup>
 	<ItemGroup>
-		<ProjectReference Include="..\Db\Db.csproj" />
+		<ProjectReference Include="..\ODataDemo.Db\ODataDemo.Db.csproj" />
 		<ProjectReference Include="..\ODataDemo.Wasm\ODataDemo.Wasm.fsproj" />
 	</ItemGroup>
 
