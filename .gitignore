@@ -20,3 +20,4 @@ publish/
 /src/Fun.OData.Query.Benchmarks/BenchmarkDotNet.Artifacts
 *.db
 *.db-*
+!demo/ODataDemo.Db
