@@ -1,15 +1,30 @@
 [<AutoOpen>]
 module Fun.OData.Query.Filter
 
-    let combineFilter operator filters =
-        filters
-        |> Seq.map (sprintf "(%s)")
-        |> String.concat (sprintf " %s " operator)
+let combineFilter operator filters = filters |> Seq.map (sprintf "(%s)") |> String.concat (sprintf " %s " operator)
 
-    let andQueries filters = combineFilter "and" filters
-    let orQueries  filters = combineFilter "or" filters
 
-    let gt name value       = sprintf "%s gt %s" name (string value)
-    let lt name value       = sprintf "%s lt %s" name (string value)
-    let eq name value       = sprintf "%s eq %s" name (string value)
-    let contains name value = sprintf "contains(%s, '%s')" name value
+let inline andQueries filters = combineFilter "and" filters
+
+let andOptionQuries filters =
+    filters
+    |> List.choose id
+    |> function
+        | [] -> ""
+        | ls -> andQueries ls
+
+        
+let inline orQueries filters = combineFilter "or" filters
+
+let orOptionQuries filters =
+    filters
+    |> List.choose id
+    |> function
+        | [] -> ""
+        | ls -> orQueries ls
+
+        
+let inline gt name value = sprintf "%s gt %s" name (string value)
+let inline lt name value = sprintf "%s lt %s" name (string value)
+let inline eq name value = sprintf "%s eq %s" name (string value)
+let inline contains name value = sprintf "contains(%s, '%s')" name value

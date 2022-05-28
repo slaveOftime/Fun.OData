@@ -2,9 +2,10 @@ namespace Fun.OData.Query
 
 open System
 open Microsoft.FSharp.Reflection
+open Fun.OData.Query.Internal.Utils
 
 
-type FieldName = string 
+type FieldName = string
 
 
 type Query =
@@ -22,114 +23,102 @@ type Query =
     | Id of string
 
 
-type FSharpType =  
-    static member IsRecordArray (ty: Type) = ty.IsArray && FSharpType.IsRecord ty.GenericTypeArguments.[0]
-    static member IsRecordList (ty: Type) = ty.FullName.StartsWith "Microsoft.FSharp.Collections.FSharpList" && FSharpType.IsRecord ty.GenericTypeArguments.[0]
-    static member IsRecordOption (ty: Type) = ty.FullName.StartsWith "Microsoft.FSharp.Core.FSharpOption" && FSharpType.IsRecord ty.GenericTypeArguments.[0]
-
-
 module Query =
 
-    let generateSelectQueryByType lowerFirstCase sourceType  =
-        FSharpType.GetRecordFields sourceType
-        |> Seq.map (fun x -> x.Name)
-        |> Seq.map (fun x ->
-            match lowerFirstCase with
-            | Some true ->
-                if String.IsNullOrEmpty x then x
-                elif x.Length = 1 then x.ToLower()
-                else Char.ToLower(x.[0]).ToString() + x.Substring(1)
-            | _ -> x)
-        |> fun x -> String.Join(",", x)
-
-    let inline generateSelectQuery<'T>() = generateSelectQueryByType None typeof<'T>
+    let inline generateSelectQuery<'T> () = generateSelectQueryByType false typeof<'T>
 
 
     let rec combineQuery spliter qs =
-        let safeAdd key map x state =
-          if String.IsNullOrEmpty x then state
-          else state |> Map.add key (map x)
+        let safeAdd key map x state = if String.IsNullOrEmpty x then state else state |> Map.add key (map x)
 
         let maps =
-          qs
-          |> List.distinct
-          |> List.fold (fun s q ->
-              match q with
-              | Id _         -> s
-              | External x    -> s |> Map.add (sprintf "External-%d" s.Count) x
-              | Select x      -> s |> safeAdd "Select"    (sprintf "$select=%s") x
-              | SelectType t  -> s |> Map.add "Select"    (generateSelectQueryByType None t |> sprintf"$select=%s")
-              | OrderBy x     -> s |> safeAdd "OrderBy"   (sprintf "$orderBy=%s") x
-              | OrderByDesc x -> s |> safeAdd "OrderBy"   (sprintf "$orderBy=%s desc") x
-              | Count         -> s |> Map.add "Count"     "$count=true"
-              | Filter x      -> s |> safeAdd (sprintf "Filter-%d" s.Count) (sprintf "%s") x
-              | Take x        -> s |> safeAdd "Take"      (sprintf "$top=%s") (string x)
-              | Skip x        -> s |> safeAdd "Skip"      (sprintf "$skip=%s") (string x)
-              | Expand x      -> s |> safeAdd "Expand"    (sprintf "$expand=%s") x
-              | ExpandEx ls   -> s |> safeAdd "Expand"    (sprintf "$expand=%s") (ls
-                                                                                 |> List.map (fun (fieldName, qs) -> 
-                                                                                     sprintf "%s%s" 
-                                                                                             fieldName 
-                                                                                             (if qs.Length = 0 
-                                                                                              then "" 
-                                                                                              else sprintf "(%s)" (combineQuery ";" qs)))
-                                                                                 |> String.concat ",")
-              )
-              Map.empty
+            qs
+            |> List.distinct
+            |> List.fold
+                (fun s q ->
+                    match q with
+                    | Id _ -> s
+                    | External x -> s |> Map.add (sprintf "External-%d" s.Count) x
+                    | Select x -> s |> safeAdd "Select" (sprintf "$select=%s") x
+                    | SelectType t -> s |> Map.add "Select" (generateSelectQueryByType false t |> sprintf "$select=%s")
+                    | OrderBy x -> s |> safeAdd "OrderBy" (sprintf "$orderBy=%s") x
+                    | OrderByDesc x -> s |> safeAdd "OrderBy" (sprintf "$orderBy=%s desc") x
+                    | Count -> s |> Map.add "Count" "$count=true"
+                    | Filter x -> s |> safeAdd (sprintf "Filter-%d" s.Count) (sprintf "%s") x
+                    | Take x -> s |> safeAdd "Take" (sprintf "$top=%s") (string x)
+                    | Skip x -> s |> safeAdd "Skip" (sprintf "$skip=%s") (string x)
+                    | Expand x -> s |> safeAdd "Expand" (sprintf "$expand=%s") x
+                    | ExpandEx ls ->
+                        s
+                        |> safeAdd
+                            "Expand"
+                            (sprintf "$expand=%s")
+                            (ls
+                             |> List.map (fun (fieldName, qs) ->
+                                 sprintf "%s%s" fieldName (if qs.Length = 0 then "" else sprintf "(%s)" (combineQuery ";" qs))
+                             )
+                             |> String.concat ",")
+                )
+                Map.empty
 
         [
-          yield! maps |> Map.filter (fun k _ -> k.StartsWith "Filter-" |> not) |> Map.toSeq |> Seq.map snd
+            yield! maps |> Map.filter (fun k _ -> k.StartsWith "Filter-" |> not) |> Map.toSeq |> Seq.map snd
 
-          maps
-          |> Map.filter (fun k _ -> k.StartsWith "Filter-")
-          |> Map.toSeq
-          |> Seq.map (snd >> sprintf "(%s)")
-          |> String.concat " and "
-          |> function
-              | "" -> ""
-              | x -> sprintf "$filter=%s" x
+            maps
+            |> Map.filter (fun k _ -> k.StartsWith "Filter-")
+            |> Map.toSeq
+            |> Seq.map (snd >> sprintf "(%s)")
+            |> String.concat " and "
+            |> function
+                | "" -> ""
+                | x -> sprintf "$filter=%s" x
         ]
         |> Seq.filter (String.IsNullOrWhiteSpace >> not)
         |> String.concat spliter
-          
-    
+
+
     let generate quries =
-        quries 
-        |> List.tryPick (function 
-            | Id x -> Some ("(" + string x + ")")
-            | _ -> None)
+        quries
+        |> List.tryPick (
+            function
+            | Id x -> Some("(" + string x + ")")
+            | _ -> None
+        )
         |> Option.defaultValue ""
         |> fun x -> x + "?" + combineQuery "&" quries
 
 
     // This will generate selected fields and expan nexted field according to the record structure
     let inline generateFor<'T> quries =
-        let rec loop (ty: Type): Query option =
+        let rec loop (ty: Type) : Query option =
             FSharpType.GetRecordFields ty
             |> Array.choose (fun x ->
                 if FSharpType.IsRecord x.PropertyType then
-                    Some (x.Name, x.PropertyType)
+                    Some(x.Name, x.PropertyType)
                 elif FSharpType.IsRecordArray x.PropertyType
-                    || FSharpType.IsRecordList x.PropertyType
-                    || FSharpType.IsRecordOption x.PropertyType
-                then
-                    Some (x.Name, x.PropertyType.GenericTypeArguments.[0])
+                     || FSharpType.IsRecordList x.PropertyType
+                     || FSharpType.IsRecordOption x.PropertyType then
+                    Some(x.Name, x.PropertyType.GenericTypeArguments.[0])
                 else
-                    None)
+                    None
+            )
             |> Array.fold
                 (fun state (name, ty) ->
-                    state@[
-                        name, [ 
+                    state
+                    @ [
+                        name,
+                        [
                             SelectType ty
                             match loop ty with
                             | Some x -> x
                             | None -> ()
                         ]
-                    ])
+                    ]
+                )
                 []
             |> function
                 | [] -> None
-                | x -> Some (ExpandEx x)
+                | x -> Some(ExpandEx x)
 
         [
             generateSelectQuery<'T> () |> Select

@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net6.0</TargetFramework>
+
+		<!--This should be synced with the url page defined in ODataDemo.Server/Pages.fs-->
+		<StaticWebAssetBasePath>wasm</StaticWebAssetBasePath>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Compile Include="Hooks.fs" />
+		<Compile Include="App.fs" />
+		<Compile Include="Startup.fs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="FSharp.SystemTextJson" Version="0.17.4" />
+		<PackageReference Include="Fun.Blazor.Wasm" Version="2.0.*" />
+		<PackageReference Include="Fun.Blazor.HotReload" Version="2.0.*" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="6.0.5" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="6.0.5" PrivateAssets="all" />
+		<PackageReference Include="Microsoft.Extensions.Http" Version="6.0.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\..\src\Fun.OData.Query\Fun.OData.Query.fsproj" />
+	</ItemGroup>
+
+</Project>

@@ -16,3 +16,7 @@ dist
 devClient
 src/Client/www/.DS_Store
 publish/
+/src/Fun.OData.Query.Benchmarks/BenchmarkDotNet.Artifacts/results
+/src/Fun.OData.Query.Benchmarks/BenchmarkDotNet.Artifacts
+*.db
+*.db-*

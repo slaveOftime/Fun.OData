@@ -1,9 +1,12 @@
 name: Build and publish nuget packages
 
 on:
+  #push:
+  #  branches:
+  #  - master
   release:
-    types:
-      - published
+    types: [published]
+    
 
 jobs:
   build:
@@ -16,15 +19,16 @@ jobs:
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: 5.0.*
+        dotnet-version: 6.0.x
 
     - name: Install dependencies
-      run: dotnet restore
+      run: dotnet tool restore
 
-    - name: Packs
+    - name: Run tests
+      run: dotnet test      
+
+    - name: Publish nuget packages
       run: |
-        dotnet pack src/Fun.OData.Giraffe/Fun.OData.Giraffe.fsproj -c Release -o artifacts --no-restore /p:Version=${{ github.event.release.tag_name }}
-        dotnet pack src/Fun.OData.Query/Fun.OData.Query.fsproj -c Release -o artifacts --no-restore /p:Version=${{ github.event.release.tag_name }}
-
-    - name: Publish
-      run: dotnet nuget push artifacts/*.nupkg --skip-duplicate -k ${{secrets.NUGET_API_KEY}} -s https://api.nuget.org/v3/index.json 
+        dotnet pack -c Release src/Fun.OData.Query/Fun.OData.Query.fsproj -o .
+        dotnet nuget push *.nupkg -s https://api.nuget.org/v3/index.json -k ${{secrets.NUGET_API_KEY}} --skip-duplicate
+    
