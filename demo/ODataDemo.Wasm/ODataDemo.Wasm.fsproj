@@ -27,4 +27,17 @@
 	  <ProjectReference Include="..\..\src\Fun.OData.Query\Fun.OData.Query.fsproj" />
 	</ItemGroup>
 
+	<Target Name="ConfigureTrimming" BeforeTargets="PrepareForILLink">
+		<ItemGroup>
+			<ManagedAssemblyToLink Condition="'%(Filename)' == 'FSharp.Data'">
+				<TrimMode>link</TrimMode>
+				<IsTrimmable>true</IsTrimmable>
+			</ManagedAssemblyToLink>
+			<ManagedAssemblyToLink Condition="'%(Filename)' == 'MessagePack'">
+				<TrimMode>link</TrimMode>
+				<IsTrimmable>true</IsTrimmable>
+			</ManagedAssemblyToLink>
+		</ItemGroup>
+	</Target>
+
 </Project>
