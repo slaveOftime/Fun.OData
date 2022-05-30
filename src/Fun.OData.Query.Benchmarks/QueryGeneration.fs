@@ -77,12 +77,11 @@ type QueryGeneration() =
 
     [<Benchmark>]
     member _.AnonymousWithCE() : string =
-        odataSimple<{| Id: int
-                       Name: string
-                       Test1: {| Id: Guid; Name: string; DemoData: DemoData |}
-                       Test2: {| Id: Guid; Name: string |} option
-                       Test3: {| Id: int |} list |}>
-            ()
+        odataDefaultQuery<{| Id: int
+                             Name: string
+                             Test1: {| Id: Guid; Name: string; DemoData: DemoData |}
+                             Test2: {| Id: Guid; Name: string |} option
+                             Test3: {| Id: int |} list |}> ()
 
 
     [<Benchmark>]
@@ -125,7 +124,7 @@ type QueryGeneration() =
 
     [<Benchmark>]
     member _.FilterWithReflectionCE() : string =
-        odataAndQuery<DemoDataBrief> {
+        filterAndQuery<DemoDataBrief> {
             gt (fun x -> x.Price) testFilter.MinPrice
             lt (fun x -> x.CreatedDate) (testFilter.FromCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
             lt (fun x -> x.CreatedDate) (testFilter.ToCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
@@ -142,7 +141,7 @@ type QueryGeneration() =
 
     [<Benchmark>]
     member _.FilterWithOptionPlainCE() : string =
-        odataAndQuery<DemoDataBrief> {
+        filterAndQuery<DemoDataBrief> {
             testFilter.MinPrice |> Option.map (Filter.gt "Price")
             testFilter.FromCreatedDate |> Option.map (fun x -> Filter.lt "CreatedDate" (x.ToString("yyyy-MM-dd")))
             testFilter.ToCreatedDate |> Option.map (fun x -> Filter.lt "CreatedDate" (x.ToString("yyyy-MM-dd")))

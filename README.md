@@ -15,16 +15,14 @@ odata<DemoDataBrief> {
     count
     keyValue "etest1" "123" // your own query key value
     keyValue "etest2" "456"
-    filter (
-        odataOr {
-            contains (fun x -> x.Name) testFilter.SearchName
-            odataAnd { // you can also nest filter
-                gt (fun x -> x.Price) testFilter.MinPrice
-                lt (fun x -> x.CreatedDate) (testFilter.FromCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
-                lt (fun x -> x.CreatedDate) (testFilter.ToCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
-            }
+    filterOr {
+        contains (fun x -> x.Name) testFilter.SearchName
+        filterAnd { // you can also nest filter
+            gt (fun x -> x.Price) testFilter.MinPrice
+            lt (fun x -> x.CreatedDate) (testFilter.FromCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
+            lt (fun x -> x.CreatedDate) (testFilter.ToCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
         }
-    )
+    }
 }
 ```
 

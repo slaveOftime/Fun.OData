@@ -412,16 +412,20 @@ type OdataAndQuery<'T>() =
 
 /// Generate odata query context
 let odata<'T> = OData<'T>()
-/// Generate odata filter context with or operator
-let odataOr<'T> = ODataOr<'T>()
-/// Generate odata filter context with and operator
-let odataAnd<'T> = ODataAnd<'T>()
 /// Generate odata query string
 let odataQuery<'T> = OdataQuery<'T>()
+
+/// Generate odata filter context with or operator
+let filterOr<'T> = ODataOr<'T>()
 /// Generate odata filter query string with or operator
-let odataOrQuery<'T> = OdataOrQuery<'T>()
+let filterOrQuery<'T> = OdataOrQuery<'T>()
+
+/// Generate odata filter context with and operator
+let filterAnd<'T> = ODataAnd<'T>()
 /// Generate odata filter query string with and operator
-let odataAndQuery<'T> = OdataAndQuery<'T>()
+let filterAndQuery<'T> = OdataAndQuery<'T>()
 
 /// Create a OData query string for a type with default settings
-let odataSimple<'T> () = ODataQueryBuilder<'T>().Yield().ToQuery()
+let odataDefault<'T> () = ODataQueryBuilder<'T>().Yield()
+
+let odataDefaultQuery<'T> () = odataDefault<'T>().ToQuery()

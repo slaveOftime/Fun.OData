@@ -23,7 +23,7 @@ let inline expectQuery x y = Assert.Equal(x, y)
 [<Fact>]
 let ``Test query generation`` () =
 
-    odataSimple<Contact> () |> expectQuery "$select=Phone,Email"
+    odataDefaultQuery<Contact> () |> expectQuery "$select=Phone,Email"
 
     odataQuery<Contact> { filter "test" } |> expectQuery "$select=Phone,Email&$filter=(test)"
 
@@ -32,12 +32,12 @@ let ``Test query generation`` () =
     odataQuery<Contact> { keyValue "myQuery" "myValue" } |> expectQuery "$select=Phone,Email&myQuery=myValue"
 
 
-    odataSimple<Person> ()
+    odataDefaultQuery<Person> ()
     |> expectQuery "$select=Name,Age,Contact,Addresses&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room)"
 
     odataQuery<Person> {
         filter (
-            odataAnd {
+            filterAnd {
                 gt (fun x -> x.Age) "10"
                 lt (fun x -> x.Age) "20"
             }
@@ -46,7 +46,7 @@ let ``Test query generation`` () =
     |> expectQuery
         "$select=Name,Age,Contact,Addresses&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room)&$filter=(Age gt 10 and Age lt 20)"
 
-    odataQuery<Person> { expandList (fun x -> x.Addresses) (odata { filter (odataAnd { contains (fun x -> x.Street) "test" }) }) }
+    odataQuery<Person> { expandList (fun x -> x.Addresses) (odata { filter (filterAnd { contains (fun x -> x.Street) "test" }) }) }
     |> expectQuery
         "$select=Name,Age,Contact,Addresses&$expand=Addresses($select=Street,Room&$filter=(contains(Street, 'test'))),Contact($select=Phone,Email)"
 
@@ -65,15 +65,11 @@ let ``Test query generation`` () =
         expandPoco (fun x -> x.Contact)
         expandList (fun x -> x.Addresses)
         expandList (fun x -> x.Addresses) (odata { count })
-        filter "custom-filter"
-        filter (
-            odataAnd {
-                gt (fun x -> x.Age) 10
-                lt (fun x -> x.Age) 20
-            }
-        )
-        filter (
-            odataOr {
+        filterAnd {
+            "custom-filter"
+            gt (fun x -> x.Age) 10
+            lt (fun x -> x.Age) 20
+            filterOr {
                 contains (fun x -> x.Name) "test1"
                 "custom1"
                 None
@@ -81,15 +77,15 @@ let ``Test query generation`` () =
                 custom (fun x -> x.Age) (sprintf "custom3(%s)")
                 custom (fun x -> x.Age) (sprintf "custom4(%s)" >> Some)
                 custom (fun x -> x.Age) (fun _ -> None)
-                odataAnd {
+                filterAnd {
                     gt (fun x -> x.Age) 10
                     lt (fun x -> x.Age) 20
                 }
             }
-        )
+        }
     }
     |> expectQuery
-        "$select=Name,Age,Contact,Addresses&$count=true&$skip=5&$top=10&$orderBy=Name&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room&$count=true)&$filter=(custom-filter) and (Age gt 10 and Age lt 20) and (contains(Name, 'test1') or (custom1) or (custom2) or (custom3(Age)) or (custom4(Age)) or (Age gt 10 and Age lt 20))"
+        "$select=Name,Age,Contact,Addresses&$count=true&$skip=5&$top=10&$orderBy=Name&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room&$count=true)&$filter=((custom-filter) and Age gt 10 and Age lt 20 and (contains(Name, 'test1') or (custom1) or (custom2) or (custom3(Age)) or (custom4(Age)) or (Age gt 10 and Age lt 20)))"
 
 
     odataQuery<{| Id: int
@@ -124,14 +120,14 @@ let ``Test query override generation`` () =
 [<Fact>]
 let ``Test yield filter directly generation`` () =
     odataQuery<Contact> {
-        odataOr {
+        filterOr {
             contains (fun x -> x.Phone) "123"
         }
     }
     |> expectQuery "$select=Phone,Email&$filter=(contains(Phone, '123'))"
 
     odataQuery<Contact> {
-        odataOr {
+        filterOr {
             contains (fun x -> x.Phone) "123"
         }
         count
@@ -140,7 +136,7 @@ let ``Test yield filter directly generation`` () =
 
     odataQuery<Contact> {
         count
-        odataOr {
+        filterOr {
             contains (fun x -> x.Phone) "123"
         }
     }
@@ -148,11 +144,11 @@ let ``Test yield filter directly generation`` () =
 
     odataQuery<Contact> {
         count
-        odataOr {
+        filterOr {
             contains (fun x -> x.Phone) "123"
         }
         take 10
-        odataOr {
+        filterOr {
             contains (fun x -> x.Email) "456"
         }
     }
