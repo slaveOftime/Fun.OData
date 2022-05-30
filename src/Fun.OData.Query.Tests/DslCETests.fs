@@ -119,3 +119,41 @@ let ``Test query override generation`` () =
         take 5
     }
     |> expectQuery "$select=Phone,Email&$count=true&$top=5"
+
+
+[<Fact>]
+let ``Test yield filter directly generation`` () =
+    odataQuery<Contact> {
+        odataOr {
+            contains (fun x -> x.Phone) "123"
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=(contains(Phone, '123'))"
+
+    odataQuery<Contact> {
+        odataOr {
+            contains (fun x -> x.Phone) "123"
+        }
+        count
+    }
+    |> expectQuery "$select=Phone,Email&$count=true&$filter=(contains(Phone, '123'))"
+
+    odataQuery<Contact> {
+        count
+        odataOr {
+            contains (fun x -> x.Phone) "123"
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$count=true&$filter=(contains(Phone, '123'))"
+
+    odataQuery<Contact> {
+        count
+        odataOr {
+            contains (fun x -> x.Phone) "123"
+        }
+        take 10
+        odataOr {
+            contains (fun x -> x.Email) "456"
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$count=true&$top=10&$filter=(contains(Phone, '123')) and (contains(Email, '456'))"

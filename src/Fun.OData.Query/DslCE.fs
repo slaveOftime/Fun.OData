@@ -123,17 +123,37 @@ type ODataQueryBuilder<'T>() =
 
     member inline _.Run(ctx: ODataQueryContext<'T>) = ctx
 
+    member inline _.Run(filter: ODataFilterContext<'T>) =
+        let ctx = ODataQueryContext<'T>()
+        ctx.Filter.Add(filter.ToQuery())
+        ctx
+
     member inline _.Yield() = ODataQueryContext<'T>()
 
     member inline _.Yield(_: unit) = ODataQueryContext<'T>()
 
     member inline _.Yield(x: ODataQueryContext<'T>) = x
 
+    member inline _.Yield(x: ODataFilterContext<'T>) = x
+
     member inline _.Delay([<InlineIfLambda>] fn) = fn ()
 
     member inline _.For(ctx: ODataQueryContext<'T>, [<InlineIfLambda>] fn: unit -> ODataQueryContext<'T>) = fn().MergeInto(ctx)
 
+    member inline _.For(ctx: ODataQueryContext<'T>, [<InlineIfLambda>] fn: unit -> ODataFilterContext<'T>) =
+        ctx.Filter.Add(fn().ToQuery())
+        ctx
+
     member inline _.Combine(x: ODataQueryContext<'T>, y: ODataQueryContext<'T>) = y.MergeInto(x)
+
+    member inline _.Combine(ctx: ODataQueryContext<'T>, filter: ODataFilterContext<'T>) =
+        ctx.Filter.Add(filter.ToQuery())
+        ctx
+
+    member inline _.Combine(filter: ODataFilterContext<'T>, ctx: ODataQueryContext<'T>) =
+        ctx.Filter.Add(filter.ToQuery())
+        ctx
+
 
     member inline _.Zero() = ODataQueryContext<'T>()
 
@@ -378,6 +398,7 @@ type OdataQuery<'T>() =
     inherit ODataQueryBuilder<'T>()
 
     member _.Run(ctx: ODataQueryContext<'T>) = ctx.ToQuery()
+    member _.Run(ctx: ODataFilterContext<'T>) = base.Run(ctx).ToQuery()
 
 type OdataOrQuery<'T>() =
     inherit ODataOrFilterBuilder<'T>()

@@ -57,7 +57,7 @@ type IComponentHook with
     member hook.LoadUsers(?top) =
         hook.ODataQuery<UserBrief>(
             "/api/Users",
-            odata {
+            odata<UserBrief> {
                 orderBy (fun x -> x.Name)
                 take top
             }
