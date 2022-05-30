@@ -93,6 +93,16 @@ type ODataQueryContext<'T>() =
 
     member ctx.ToQuery() = generateQuery typeof<'T> ctx.DisableAutoExpand ctx.SimpleQuries ctx.Expand ctx.Filter
 
+    member ctx.MergeInto(target: ODataQueryContext<'T>) =
+        for KeyValue (k, v) in ctx.SimpleQuries do
+            target.SimpleQuries[ k ] <- v
+        for KeyValue (k, v) in ctx.Expand do
+            target.Expand[ k ] <- v
+        target.Filter.AddRange ctx.Filter
+        target.DisableAutoExpand <- ctx.DisableAutoExpand
+
+        target
+
 
 type ODataFilterContext<'T>(operator: string, filter: FilterCombinator) =
 
@@ -109,14 +119,23 @@ type ODataFilterContext<'T>(operator: string, filter: FilterCombinator) =
             ""
 
 
-
 type ODataQueryBuilder<'T>() =
 
     member inline _.Run(ctx: ODataQueryContext<'T>) = ctx
 
+    member inline _.Yield() = ODataQueryContext<'T>()
+
     member inline _.Yield(_: unit) = ODataQueryContext<'T>()
 
+    member inline _.Yield(x: ODataQueryContext<'T>) = x
+
     member inline _.Delay([<InlineIfLambda>] fn) = fn ()
+
+    member inline _.For(ctx: ODataQueryContext<'T>, [<InlineIfLambda>] fn: unit -> ODataQueryContext<'T>) = fn().MergeInto(ctx)
+
+    member inline _.Combine(x: ODataQueryContext<'T>, y: ODataQueryContext<'T>) = y.MergeInto(x)
+
+    member inline _.Zero() = ODataQueryContext<'T>()
 
 
     /// With this, you can use CE but without add other quries.
@@ -132,12 +151,12 @@ type ODataQueryBuilder<'T>() =
 
     [<CustomOperation("count")>]
     member inline _.Count(ctx: ODataQueryContext<'T>) =
-        ctx.SimpleQuries.Add("$count", "true")
+        ctx.SimpleQuries[ "$count" ] <- "true"
         ctx
 
     [<CustomOperation("take")>]
     member inline _.Take(ctx: ODataQueryContext<'T>, num: int) =
-        ctx.SimpleQuries.Add("$top", num.ToString())
+        ctx.SimpleQuries[ "$top" ] <- num.ToString()
         ctx
 
     [<CustomOperation("take")>]
@@ -148,7 +167,7 @@ type ODataQueryBuilder<'T>() =
 
     [<CustomOperation("skip")>]
     member inline _.Skip(ctx: ODataQueryContext<'T>, num: int) =
-        ctx.SimpleQuries.Add("$skip", num.ToString())
+        ctx.SimpleQuries[ "$skip" ] <- num.ToString()
         ctx
 
     [<CustomOperation("skip")>]
@@ -159,22 +178,22 @@ type ODataQueryBuilder<'T>() =
 
     [<CustomOperation("orderBy")>]
     member inline _.OrderBy(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) =
-        ctx.SimpleQuries.Add("$orderBy", getExpressionName prop)
+        ctx.SimpleQuries[ "$orderBy" ] <- getExpressionName prop
         ctx
 
     [<CustomOperation("orderBy")>]
     member inline _.OrderBy(ctx: ODataQueryContext<'T>, x: string) =
-        ctx.SimpleQuries.Add("$orderBy", x)
+        ctx.SimpleQuries[ "$orderBy" ] <- x
         ctx
 
     [<CustomOperation("orderByDesc")>]
     member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) =
-        ctx.SimpleQuries.Add("$orderBy", getExpressionName prop + " desc")
+        ctx.SimpleQuries[ "$orderBy" ] <- getExpressionName prop + " desc"
         ctx
 
     [<CustomOperation("orderByDesc")>]
     member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, x: string) =
-        ctx.SimpleQuries.Add("$orderBy", x + " desc")
+        ctx.SimpleQuries[ "$orderBy" ] <- x + " desc"
         ctx
 
 
@@ -350,26 +369,33 @@ type ODataOrFilterBuilder<'T>() =
     inherit ODataFilterBuilder<'T> " or "
 
 
-type odata<'T> = ODataQueryBuilder<'T>
-type odataOr<'T> = ODataOrFilterBuilder<'T>
-type odataAnd<'T> = ODataAndFilterBuilder<'T>
+type OData<'T> = ODataQueryBuilder<'T>
+type ODataOr<'T> = ODataOrFilterBuilder<'T>
+type ODataAnd<'T> = ODataAndFilterBuilder<'T>
 
 
-type odataQuery<'T>() =
-    inherit odata<'T>()
+type OdataQuery<'T>() =
+    inherit ODataQueryBuilder<'T>()
 
     member _.Run(ctx: ODataQueryContext<'T>) = ctx.ToQuery()
 
-type odataOrQuery<'T>() =
+type OdataOrQuery<'T>() =
     inherit ODataOrFilterBuilder<'T>()
 
     member _.Run(ctx) = base.Run(ctx).ToQuery()
 
-type odataAndQuery<'T>() =
+type OdataAndQuery<'T>() =
     inherit ODataAndFilterBuilder<'T>()
 
     member _.Run(ctx) = base.Run(ctx).ToQuery()
 
 
+let odata<'T> = OData<'T>()
+let odataOr<'T> = ODataOr<'T>()
+let odataAnd<'T> = ODataAnd<'T>()
+let odataQuery<'T> = OdataQuery<'T>()
+let odataOrQuery<'T> = OdataOrQuery<'T>()
+let odataAndQuery<'T> = OdataAndQuery<'T>()
+
 /// Create a OData query string for a type with default settings
-let odataSimple<'T> () = odata<'T>().Yield().ToQuery()
+let odataSimple<'T> () = ODataQueryBuilder<'T>().Yield().ToQuery()

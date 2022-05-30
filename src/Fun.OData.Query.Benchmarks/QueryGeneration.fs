@@ -99,7 +99,7 @@ type QueryGeneration() =
 
     [<Benchmark>]
     member _.CustomQueryWithCE() : string =
-        odataQuery<DemoDataBrief> () {
+        odataQuery<DemoDataBrief> {
             disableAutoExpand
             skip ((testFilter.Page - 1) * testFilter.PageSize)
             take testFilter.PageSize
@@ -111,22 +111,21 @@ type QueryGeneration() =
 
     [<Benchmark>]
     member _.FilterWithList() : string =
-        andQueries
-            [
-                match testFilter.MinPrice with
-                | None -> ()
-                | Some x -> gt "Price" x
-                match testFilter.FromCreatedDate with
-                | None -> ()
-                | Some x -> lt "CreatedDate" (x.ToString("yyyy-MM-dd"))
-                match testFilter.ToCreatedDate with
-                | None -> ()
-                | Some x -> lt "CreatedDate" (x.ToString("yyyy-MM-dd"))
-            ]
+        andQueries [
+            match testFilter.MinPrice with
+            | None -> ()
+            | Some x -> gt "Price" x
+            match testFilter.FromCreatedDate with
+            | None -> ()
+            | Some x -> lt "CreatedDate" (x.ToString("yyyy-MM-dd"))
+            match testFilter.ToCreatedDate with
+            | None -> ()
+            | Some x -> lt "CreatedDate" (x.ToString("yyyy-MM-dd"))
+        ]
 
     [<Benchmark>]
     member _.FilterWithReflectionCE() : string =
-        odataAndQuery<DemoDataBrief> () {
+        odataAndQuery<DemoDataBrief> {
             gt (fun x -> x.Price) testFilter.MinPrice
             lt (fun x -> x.CreatedDate) (testFilter.FromCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
             lt (fun x -> x.CreatedDate) (testFilter.ToCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
@@ -135,17 +134,35 @@ type QueryGeneration() =
 
     [<Benchmark>]
     member _.FilterWithOptionList() : string =
-        andOptionQuries
-            [
-                testFilter.MinPrice |> Option.map (gt "Price")
-                testFilter.FromCreatedDate |> Option.map (fun x -> lt "CreatedDate" (x.ToString("yyyy-MM-dd")))
-                testFilter.ToCreatedDate |> Option.map (fun x -> lt "CreatedDate" (x.ToString("yyyy-MM-dd")))
-            ]
+        andOptionQuries [
+            testFilter.MinPrice |> Option.map (gt "Price")
+            testFilter.FromCreatedDate |> Option.map (fun x -> lt "CreatedDate" (x.ToString("yyyy-MM-dd")))
+            testFilter.ToCreatedDate |> Option.map (fun x -> lt "CreatedDate" (x.ToString("yyyy-MM-dd")))
+        ]
 
     [<Benchmark>]
     member _.FilterWithOptionPlainCE() : string =
-        odataAndQuery<DemoDataBrief> () {
+        odataAndQuery<DemoDataBrief> {
             testFilter.MinPrice |> Option.map (Filter.gt "Price")
             testFilter.FromCreatedDate |> Option.map (fun x -> Filter.lt "CreatedDate" (x.ToString("yyyy-MM-dd")))
             testFilter.ToCreatedDate |> Option.map (fun x -> Filter.lt "CreatedDate" (x.ToString("yyyy-MM-dd")))
+        }
+
+
+    [<Benchmark>]
+    member _.OverrideWithDU() : string =
+        let otherQuery = [ Take 10; Skip 10 ]
+        Query.generateFor<DemoDataBrief> [ Count; Take 5; yield! otherQuery ]
+
+    [<Benchmark>]
+    member _.OverrideWithCE() : string =
+        let otherQuery =
+            odata {
+                take 10
+                skip 10
+            }
+        odataQuery<DemoDataBrief> {
+            count
+            take 5
+            otherQuery
         }

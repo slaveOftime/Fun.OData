@@ -9,16 +9,16 @@ But you can also use plain text if you want to get better performance than DU.
 You can check **demos/ODataDemo.Server** which contains how to setup <span style="color: green">OData + asp.net core MVC with fsharp + swagger support.</span>  
 
 ```fsharp
-odata<DemoDataBrief> () {
+odata<DemoDataBrief> {
     skip ((testFilter.Page - 1) * testFilter.PageSize)
     take testFilter.PageSize
     count
     keyValue "etest1" "123" // your own query key value
     keyValue "etest2" "456"
     filter (
-        odataOr () {
+        odataOr {
             contains (fun x -> x.Name) testFilter.SearchName
-            odataAnd () { // you can also nest filter
+            odataAnd { // you can also nest filter
                 gt (fun x -> x.Price) testFilter.MinPrice
                 lt (fun x -> x.CreatedDate) (testFilter.FromCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
                 lt (fun x -> x.CreatedDate) (testFilter.ToCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
@@ -33,7 +33,7 @@ odata<{| Id: int
          Name: string
          Test1: {| Id: Guid; Name: string; DemoData: DemoData |}
          Test2: {| Id: Guid; Name: string |} option
-         Test3: {| Id: int |} list |}> () {
+         Test3: {| Id: int |} list |}> {
     empty
 }
 ```
@@ -43,10 +43,10 @@ But you can also override its behavior:
 
 
 ```fsharp
-odata<Person> () {
+odata<Person> {
     expandPoco (fun x -> x.Contact)
     expandList (fun x -> x.Addresses) (
-        odata () { // you can also nest
+        odata { // you can also nest
             filter ...
         }
     )
@@ -56,12 +56,12 @@ odata<Person> () {
 You can also disable auto expand for better performance, if you do not want any for plain object.
 
 ```fsharp
-odata<Person> () {
+odata<Person> {
     disableAutoExpand
 }
 ```
 
-The **odata<'T> () { ... }** will generate ODataQueryContext which you can call **ToQuery()** to generate the final string and combine with your logic.  
+The **odata<'T> { ... }** will generate ODataQueryContext which you can call **ToQuery()** to generate the final string and combine with your logic.  
 Please check  **demos/ODataDemo.Wasm/Hooks.fs** for an example.
 
 

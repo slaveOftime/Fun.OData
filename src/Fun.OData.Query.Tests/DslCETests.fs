@@ -25,19 +25,19 @@ let ``Test query generation`` () =
 
     odataSimple<Contact> () |> expectQuery "$select=Phone,Email"
 
-    odataQuery<Contact> () { filter "test" } |> expectQuery "$select=Phone,Email&$filter=(test)"
+    odataQuery<Contact> { filter "test" } |> expectQuery "$select=Phone,Email&$filter=(test)"
 
-    odataQuery<Contact> () { count } |> expectQuery "$select=Phone,Email&$count=true"
+    odataQuery<Contact> { count } |> expectQuery "$select=Phone,Email&$count=true"
 
-    odataQuery<Contact> () { keyValue "myQuery" "myValue" } |> expectQuery "$select=Phone,Email&myQuery=myValue"
+    odataQuery<Contact> { keyValue "myQuery" "myValue" } |> expectQuery "$select=Phone,Email&myQuery=myValue"
 
 
     odataSimple<Person> ()
     |> expectQuery "$select=Name,Age,Contact,Addresses&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room)"
 
-    odataQuery<Person> () {
+    odataQuery<Person> {
         filter (
-            odataAnd () {
+            odataAnd {
                 gt (fun x -> x.Age) "10"
                 lt (fun x -> x.Age) "20"
             }
@@ -46,34 +46,34 @@ let ``Test query generation`` () =
     |> expectQuery
         "$select=Name,Age,Contact,Addresses&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room)&$filter=(Age gt 10 and Age lt 20)"
 
-    odataQuery<Person> () { expandList (fun x -> x.Addresses) (odata () { filter (odataAnd () { contains (fun x -> x.Street) "test" }) }) }
+    odataQuery<Person> { expandList (fun x -> x.Addresses) (odata { filter (odataAnd { contains (fun x -> x.Street) "test" }) }) }
     |> expectQuery
         "$select=Name,Age,Contact,Addresses&$expand=Addresses($select=Street,Room&$filter=(contains(Street, 'test'))),Contact($select=Phone,Email)"
 
-    odataQuery<Person> () {
+    odataQuery<Person> {
         disableAutoExpand
         expandPoco (fun x -> x.Contact)
     }
     |> expectQuery "$select=Name,Age,Contact,Addresses&$expand=Contact($select=Phone,Email)"
 
 
-    odataQuery<Person> () {
+    odataQuery<Person> {
         count
         skip 5
         take 10
         orderBy (fun x -> x.Name)
         expandPoco (fun x -> x.Contact)
         expandList (fun x -> x.Addresses)
-        expandList (fun x -> x.Addresses) (odata () { count })
+        expandList (fun x -> x.Addresses) (odata { count })
         filter "custom-filter"
         filter (
-            odataAnd () {
+            odataAnd {
                 gt (fun x -> x.Age) 10
                 lt (fun x -> x.Age) 20
             }
         )
         filter (
-            odataOr () {
+            odataOr {
                 contains (fun x -> x.Name) "test1"
                 "custom1"
                 None
@@ -81,7 +81,7 @@ let ``Test query generation`` () =
                 custom (fun x -> x.Age) (sprintf "custom3(%s)")
                 custom (fun x -> x.Age) (sprintf "custom4(%s)" >> Some)
                 custom (fun x -> x.Age) (fun _ -> None)
-                odataAnd () {
+                odataAnd {
                     gt (fun x -> x.Age) 10
                     lt (fun x -> x.Age) 20
                 }
@@ -96,10 +96,26 @@ let ``Test query generation`` () =
                   Name: string
                   Test1: {| Id: Guid; Name: string; Contact: Contact |}
                   Test2: {| Id: Guid; Name: string |} option
-                  Test3: {| Id: int |}[]
-                  Test4: {| Id: int |} list |}>
-        () {
+                  Test3: {| Id: int |} []
+                  Test4: {| Id: int |} list |}> {
         empty
     }
     |> expectQuery
         "$select=Id,Name,Test1,Test2,Test3,Test4&$expand=Test1($select=Contact,Id,Name&$expand=Contact($select=Phone,Email)),Test2($select=Id,Name),Test3($select=Id),Test4($select=Id)"
+
+
+[<Fact>]
+let ``Test query override generation`` () =
+    odataQuery<Contact> {
+        count
+        take 5
+        odata { take 10 }
+    }
+    |> expectQuery "$select=Phone,Email&$count=true&$top=10"
+
+    odataQuery<Contact> {
+        count
+        odata { take 10 }
+        take 5
+    }
+    |> expectQuery "$select=Phone,Email&$count=true&$top=5"

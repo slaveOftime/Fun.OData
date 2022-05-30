@@ -57,7 +57,7 @@ type IComponentHook with
     member hook.LoadUsers(?top) =
         hook.ODataQuery<UserBrief>(
             "/api/Users",
-            odata () {
+            odata {
                 orderBy (fun x -> x.Name)
                 take top
             }
@@ -69,4 +69,4 @@ type IComponentHook with
         )
 
 
-    member hook.LoadUserDetail(id: int) = hook.ODataSingle<User>($"/api/Users/{id}", odata () { empty }) |> Task.map DeferredState.ofResult
+    member hook.LoadUserDetail(id: int) = hook.ODataSingle<User>($"/api/Users/{id}", odata { empty }) |> Task.map DeferredState.ofResult
