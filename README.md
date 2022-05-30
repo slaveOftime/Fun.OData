@@ -109,16 +109,18 @@ Query.generateFor<
 
 ## Benchmarks
 
-|                  Method |         Mean |       Error |      StdDev |  Gen 0 |  Gen 1 | Allocated |
-|------------------------ |-------------:|------------:|------------:|-------:|-------:|----------:|
-|         AnonymousWithDU | 168,550.8 ns | 3,297.87 ns | 3,238.95 ns | 9.5215 |      - |     60 KB |
-|         AnonymousWithCE | 117,002.9 ns | 2,257.73 ns | 3,014.01 ns | 5.1270 |      - |     32 KB |
-|       CustomQueryWithDU |  15,625.7 ns |   303.09 ns |   372.23 ns | 1.4343 |      - |      9 KB |
-|       CustomQueryWithCE |  11,403.4 ns |    98.77 ns |    87.55 ns | 0.7172 |      - |      4 KB |
-|          FilterWithList |   1,193.4 ns |    18.17 ns |    16.11 ns | 0.2956 |      - |      2 KB |
-|  FilterWithReflectionCE |  84,145.8 ns | 1,454.71 ns | 1,289.56 ns | 8.7891 | 0.1221 |     54 KB |
-|    FilterWithOptionList |   1,238.5 ns |    22.89 ns |    21.41 ns | 0.3223 |      - |      2 KB |
-| FilterWithOptionPlainCE |     931.5 ns |    18.60 ns |    25.46 ns | 0.3462 | 0.0010 |      2 KB |
+|                  Method |       Mean |     Error |    StdDev |   Gen 0 | Allocated |
+|------------------------ |-----------:|----------:|----------:|--------:|----------:|
+|         AnonymousWithDU | 197.666 us | 3.7536 us | 3.5111 us | 14.4043 |     60 KB |
+|         AnonymousWithCE | 134.004 us | 2.6483 us | 4.0442 us |  7.5684 |     32 KB |
+|       CustomQueryWithDU |  18.422 us | 0.3611 us | 0.4567 us |  2.1667 |      9 KB |
+|       CustomQueryWithCE |  14.120 us | 0.1454 us | 0.1215 us |  1.0834 |      4 KB |
+|          FilterWithList |   1.299 us | 0.0250 us | 0.0288 us |  0.4425 |      2 KB |
+|  FilterWithReflectionCE |  91.523 us | 1.3325 us | 1.2464 us | 13.1836 |     54 KB |
+|    FilterWithOptionList |   1.349 us | 0.0231 us | 0.0216 us |  0.4826 |      2 KB |
+| FilterWithOptionPlainCE |   1.056 us | 0.0211 us | 0.0347 us |  0.5188 |      2 KB |
+|          OverrideWithDU |  34.866 us | 0.6247 us | 0.5216 us |  2.8076 |     11 KB |
+|          OverrideWithCE |  23.646 us | 0.4698 us | 0.3923 us |  1.4038 |      6 KB |
 
 
 ## Server side [Deprecated]
