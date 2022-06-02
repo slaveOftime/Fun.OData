@@ -19,7 +19,8 @@ module Internal =
 
     let rec generateQuery
         (ty: Type)
-        disableAutoExpand
+        (combinator: string)
+        (disableAutoExpand)
         (simpleQuries: Dictionary<string, string>)
         (expands: Dictionary<string, string>)
         (filter: List<string>)
@@ -39,7 +40,7 @@ module Internal =
 
         if simpleQuries <> null && simpleQuries.Count > 0 then
             for KeyValue (k, v) in simpleQuries do
-                sb.Append("&").Append(k).Append("=").Append(v) |> ignore
+                sb.Append(combinator).Append(k).Append("=").Append(v) |> ignore
 
 
         let mutable expands = expands
@@ -50,17 +51,17 @@ module Internal =
             for field in fields do
                 if expands.ContainsKey field.Name |> not then
                     if FSharpType.IsRecord field.PropertyType then
-                        expands[field.Name] <- (generateQuery field.PropertyType false null null null).ToString()
+                        expands[field.Name] <- (generateQuery field.PropertyType ";" false null null null).ToString()
                     elif FSharpType.IsRecordOption field.PropertyType then
-                        expands[field.Name] <- (generateQuery field.PropertyType.GenericTypeArguments[0] false null null null).ToString()
+                        expands[field.Name] <- (generateQuery field.PropertyType.GenericTypeArguments[0] ";" false null null null).ToString()
                     else
                         match FSharpType.TryGetIEnumeralbleGenericType field.PropertyType with
-                        | Some ty -> expands[field.Name] <- (generateQuery ty false null null null).ToString()
+                        | Some ty -> expands[field.Name] <- (generateQuery ty ";" false null null null).ToString()
                         | None -> ()
 
         if expands <> null && expands.Count > 0 then
             let mutable i = 0
-            sb.Append("&$expand=") |> ignore
+            sb.Append(combinator).Append("$expand=") |> ignore
             for KeyValue (k, v) in expands do
                 if i > 0 then sb.Append(",") |> ignore
                 if String.IsNullOrEmpty v |> not then
@@ -72,7 +73,7 @@ module Internal =
 
         if filter <> null && filter.Count > 0 then
             let mutable i = 0
-            sb.Append("&$filter=") |> ignore
+            sb.Append(combinator).Append("$filter=") |> ignore
             while i < filter.Count do
                 if i > 0 then sb.Append(" and ") |> ignore
                 let filterStr = filter[i]
@@ -91,7 +92,8 @@ type ODataQueryContext<'T>() =
     member val Filter = List<string>()
     member val DisableAutoExpand = false with get, set
 
-    member ctx.ToQuery() = generateQuery typeof<'T> ctx.DisableAutoExpand ctx.SimpleQuries ctx.Expand ctx.Filter
+    member ctx.ToQuery(?combinator) =
+        generateQuery typeof<'T> (defaultArg combinator "&") ctx.DisableAutoExpand ctx.SimpleQuries ctx.Expand ctx.Filter
 
     member ctx.MergeInto(target: ODataQueryContext<'T>) =
         for KeyValue (k, v) in ctx.SimpleQuries do
@@ -224,7 +226,7 @@ type ODataQueryBuilder<'T>() =
 
     [<CustomOperation("expandPoco")>]
     member inline _.Expand(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>, expandCtx: ODataQueryContext<'Prop>) =
-        ctx.Expand[ getExpressionName prop ] <- expandCtx.ToQuery()
+        ctx.Expand[ getExpressionName prop ] <- expandCtx.ToQuery(";")
         ctx
 
     [<CustomOperation("expandList")>]
@@ -234,7 +236,7 @@ type ODataQueryBuilder<'T>() =
 
     [<CustomOperation("expandList")>]
     member inline _.ExpandList(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, IEnumerable<'Prop>>>, expandCtx: ODataQueryContext<'Prop>) =
-        ctx.Expand[ getExpressionName prop ] <- expandCtx.ToQuery()
+        ctx.Expand[ getExpressionName prop ] <- expandCtx.ToQuery(";")
         ctx
 
 

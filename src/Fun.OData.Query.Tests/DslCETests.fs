@@ -46,9 +46,15 @@ let ``Test query generation`` () =
     |> expectQuery
         "$select=Name,Age,Contact,Addresses&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room)&$filter=(Age gt 10 and Age lt 20)"
 
-    odataQuery<Person> { expandList (fun x -> x.Addresses) (odata { filter (filterAnd { contains (fun x -> x.Street) "test" }) }) }
+    odataQuery<Person> { 
+        expandList (fun x -> x.Addresses) (
+            odata { 
+                filterAnd { contains (fun x -> x.Street) "test" }
+            }
+        ) 
+    }
     |> expectQuery
-        "$select=Name,Age,Contact,Addresses&$expand=Addresses($select=Street,Room&$filter=(contains(Street, 'test'))),Contact($select=Phone,Email)"
+        "$select=Name,Age,Contact,Addresses&$expand=Addresses($select=Street,Room;$filter=(contains(Street, 'test'))),Contact($select=Phone,Email)"
 
     odataQuery<Person> {
         disableAutoExpand
@@ -85,7 +91,7 @@ let ``Test query generation`` () =
         }
     }
     |> expectQuery
-        "$select=Name,Age,Contact,Addresses&$count=true&$skip=5&$top=10&$orderBy=Name&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room&$count=true)&$filter=((custom-filter) and Age gt 10 and Age lt 20 and (contains(Name, 'test1') or (custom1) or (custom2) or (custom3(Age)) or (custom4(Age)) or (Age gt 10 and Age lt 20)))"
+        "$select=Name,Age,Contact,Addresses&$count=true&$skip=5&$top=10&$orderBy=Name&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room;$count=true)&$filter=((custom-filter) and Age gt 10 and Age lt 20 and (contains(Name, 'test1') or (custom1) or (custom2) or (custom3(Age)) or (custom4(Age)) or (Age gt 10 and Age lt 20)))"
 
 
     odataQuery<{| Id: int
@@ -97,7 +103,7 @@ let ``Test query generation`` () =
         empty
     }
     |> expectQuery
-        "$select=Id,Name,Test1,Test2,Test3,Test4&$expand=Test1($select=Contact,Id,Name&$expand=Contact($select=Phone,Email)),Test2($select=Id,Name),Test3($select=Id),Test4($select=Id)"
+        "$select=Id,Name,Test1,Test2,Test3,Test4&$expand=Test1($select=Contact,Id,Name;$expand=Contact($select=Phone,Email)),Test2($select=Id,Name),Test3($select=Id),Test4($select=Id)"
 
 
 [<Fact>]
