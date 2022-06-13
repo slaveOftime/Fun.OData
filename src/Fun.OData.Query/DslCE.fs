@@ -255,7 +255,7 @@ type ODataQueryBuilder<'T>() =
         | Some filter -> this.Filter(ctx, filter)
 
     [<CustomOperation("filter")>]
-    member inline _.Filter(ctx: ODataQueryContext<'T>, filter: ODataFilterContext<'T>) =
+    member inline _.Filter(ctx: ODataQueryContext<'T>, filter: ODataFilterContext<_>) =
         ctx.Filter.Add(filter.ToQuery())
         ctx
 
