@@ -52,9 +52,9 @@ module Internal =
 
             for field in fields do
                 if expands.ContainsKey field.Name |> not then
-                    if FSharpType.IsRecord field.PropertyType && (field.PropertyType <> ty || loopDeepth <= loopDeepthMax) then
-                        let nextLoopDeepth = if field.PropertyType = ty then loopDeepth + 1 else loopDeepth
-                        expands[field.Name] <- (generateQuery field.PropertyType ";" false loopDeepthMax nextLoopDeepth null null null).ToString()
+                    if FSharpType.IsRecord field.PropertyType then
+                        if field.PropertyType = ty then failwith "Recursive record is not supported"
+                        expands[field.Name] <- (generateQuery field.PropertyType ";" false loopDeepthMax loopDeepth null null null).ToString()
                     elif FSharpType.IsRecordOption field.PropertyType
                          && (field.PropertyType.GenericTypeArguments[0] <> ty || loopDeepth <= loopDeepthMax) then
                         let nextLoopDeepth =
@@ -86,11 +86,10 @@ module Internal =
 
         if filter <> null && filter.Count > 0 then
             let mutable i = 0
-            sb.Append(combinator).Append("$filter=") |> ignore
-            while i < filter.Count do
+            for filterStr in filter do
                 if i > 0 then sb.Append(" and ") |> ignore
-                let filterStr = filter[i]
                 if String.IsNullOrEmpty filterStr |> not then
+                    if i = 0 then sb.Append(combinator).Append("$filter=") |> ignore
                     sb.Append("(").Append(filterStr).Append(")") |> ignore
                     i <- i + 1
 
@@ -325,7 +324,10 @@ type ODataFilterBuilder<'T>(oper: string) =
 
     [<CustomOperation("eq")>]
     member inline this.EQ([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string) =
-        FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(getExpressionName prop).Append(" eq ").Append(x))
+        if String.IsNullOrEmpty x then
+            ctx
+        else
+            FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(getExpressionName prop).Append(" eq ").Append(x))
 
     [<CustomOperation("eq")>]
     member inline this.EQ([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string option) =
@@ -334,7 +336,12 @@ type ODataFilterBuilder<'T>(oper: string) =
         | Some x -> this.EQ(ctx, prop, x)
 
     [<CustomOperation("eq")>]
-    member inline this.EQ([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop) = this.EQ(ctx, prop, x.ToString())
+    member inline this.EQ([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop) =
+        if box x |> isNull then ctx else this.EQ(ctx, prop, x.ToString())
+
+    [<CustomOperation("eq")>]
+    member inline this.EQ([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop option>>, x: 'Prop) =
+        if box x |> isNull then ctx else this.EQ(ctx, prop, x.ToString())
 
     [<CustomOperation("eq")>]
     member inline this.EQ([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop option) =
@@ -343,7 +350,10 @@ type ODataFilterBuilder<'T>(oper: string) =
 
     [<CustomOperation("gt")>]
     member inline this.GT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string) =
-        FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(getExpressionName prop).Append(" gt ").Append(x))
+        if String.IsNullOrEmpty x then
+            ctx
+        else
+            FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(getExpressionName prop).Append(" gt ").Append(x))
 
     [<CustomOperation("gt")>]
     member inline this.GT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string option) =
@@ -352,7 +362,12 @@ type ODataFilterBuilder<'T>(oper: string) =
         | Some x -> this.GT(ctx, prop, x)
 
     [<CustomOperation("gt")>]
-    member inline this.GT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop) = this.GT(ctx, prop, x.ToString())
+    member inline this.GT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop) =
+        if box x |> isNull then ctx else this.GT(ctx, prop, x.ToString())
+
+    [<CustomOperation("gt")>]
+    member inline this.GT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop option>>, x: 'Prop) =
+        if box x |> isNull then ctx else this.GT(ctx, prop, x.ToString())
 
     [<CustomOperation("gt")>]
     member inline this.GT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop option) =
@@ -361,7 +376,10 @@ type ODataFilterBuilder<'T>(oper: string) =
 
     [<CustomOperation("lt")>]
     member inline this.LT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string) =
-        FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(getExpressionName prop).Append(" lt ").Append(x))
+        if String.IsNullOrEmpty x then
+            ctx
+        else
+            FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(getExpressionName prop).Append(" lt ").Append(x))
 
     [<CustomOperation("lt")>]
     member inline this.LT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string option) =
@@ -370,7 +388,12 @@ type ODataFilterBuilder<'T>(oper: string) =
         | Some x -> this.LT(ctx, prop, x)
 
     [<CustomOperation("lt")>]
-    member inline this.LT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop) = this.LT(ctx, prop, x.ToString())
+    member inline this.LT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop) =
+        if box x |> isNull then ctx else this.LT(ctx, prop, x.ToString())
+
+    [<CustomOperation("lt")>]
+    member inline this.LT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop option>>, x: 'Prop) =
+        if box x |> isNull then ctx else this.LT(ctx, prop, x.ToString())
 
     [<CustomOperation("lt")>]
     member inline this.LT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop option) =
@@ -399,7 +422,11 @@ type ODataFilterBuilder<'T>(oper: string) =
 
     [<CustomOperation("custom")>]
     member inline this.Custom([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, fn: string -> string) =
-        FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append("(").Append(fn (getExpressionName prop)).Append(")"))
+        let condition = fn (getExpressionName prop)
+        if String.IsNullOrEmpty condition then
+            ctx
+        else
+            FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append("(").Append(condition).Append(")"))
 
     [<CustomOperation("custom")>]
     member inline this.Custom([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, fn: string -> string option) =

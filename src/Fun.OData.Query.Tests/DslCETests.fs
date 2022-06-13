@@ -166,6 +166,26 @@ let ``Test yield filter directly generation`` () =
         }
     }
     |> expectQuery "$select=Phone,Email&$filter=(contains(Address, '123'))"
+
+    odataQuery<Contact> {
+        filterAnd<{| Address: int option; Address2: string option |}> {
+            eq (fun x -> x.Address) ({| Address = Option<int>.None |}).Address
+            lt (fun x -> x.Address) ({| Address = Option<int>.None |}).Address
+            gt (fun x -> x.Address) ({| Address = Option<int>.None |}).Address
+            gt (fun x -> x.Address) (Option<int>.None)
+            contains (fun x -> x.Address2) None
+        }
+    }
+    |> expectQuery "$select=Phone,Email"
+    
+    odataQuery<Contact> {
+        filterAnd<{| Address: int option |}> {
+            eq (fun x -> x.Address) 1
+            lt (fun x -> x.Address) 2
+            gt (fun x -> x.Address) 3
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=(Address eq 1 and Address lt 2 and Address gt 3)"
     
     
 type LoopNav = { Id: int; LoopNav: LoopNav option }
