@@ -21,6 +21,8 @@ module Internal =
         (ty: Type)
         (combinator: string)
         (disableAutoExpand)
+        (loopDeepthMax)
+        (loopDeepth)
         (simpleQuries: Dictionary<string, string>)
         (expands: Dictionary<string, string>)
         (filter: List<string>)
@@ -50,14 +52,25 @@ module Internal =
 
             for field in fields do
                 if expands.ContainsKey field.Name |> not then
-                    if FSharpType.IsRecord field.PropertyType then
-                        expands[field.Name] <- (generateQuery field.PropertyType ";" false null null null).ToString()
-                    elif FSharpType.IsRecordOption field.PropertyType then
-                        expands[field.Name] <- (generateQuery field.PropertyType.GenericTypeArguments[0] ";" false null null null).ToString()
+                    if FSharpType.IsRecord field.PropertyType && (field.PropertyType <> ty || loopDeepth <= loopDeepthMax) then
+                        let nextLoopDeepth = if field.PropertyType = ty then loopDeepth + 1 else loopDeepth
+                        expands[field.Name] <- (generateQuery field.PropertyType ";" false loopDeepthMax nextLoopDeepth null null null).ToString()
+                    elif FSharpType.IsRecordOption field.PropertyType
+                         && (field.PropertyType.GenericTypeArguments[0] <> ty || loopDeepth <= loopDeepthMax) then
+                        let nextLoopDeepth =
+                            if field.PropertyType.GenericTypeArguments[0] = ty then
+                                loopDeepth + 1
+                            else
+                                loopDeepth
+                        expands[field.Name] <-
+                            (generateQuery field.PropertyType.GenericTypeArguments[0] ";" false loopDeepthMax nextLoopDeepth null null null)
+                                .ToString()
                     else
                         match FSharpType.TryGetIEnumeralbleGenericType field.PropertyType with
-                        | Some ty -> expands[field.Name] <- (generateQuery ty ";" false null null null).ToString()
-                        | None -> ()
+                        | Some ty when field.PropertyType <> ty || loopDeepth <= loopDeepthMax ->
+                            let nextLoopDeepth = if field.PropertyType = ty then loopDeepth + 1 else loopDeepth
+                            expands[field.Name] <- (generateQuery ty ";" false loopDeepthMax nextLoopDeepth null null null).ToString()
+                        | _ -> ()
 
         if expands <> null && expands.Count > 0 then
             let mutable i = 0
@@ -91,9 +104,10 @@ type ODataQueryContext<'T>() =
     member val Expand = Dictionary<string, string>()
     member val Filter = List<string>()
     member val DisableAutoExpand = false with get, set
+    member val MaxLoopDeepth = 1 with get, set
 
     member ctx.ToQuery(?combinator) =
-        generateQuery typeof<'T> (defaultArg combinator "&") ctx.DisableAutoExpand ctx.SimpleQuries ctx.Expand ctx.Filter
+        generateQuery typeof<'T> (defaultArg combinator "&") ctx.DisableAutoExpand ctx.MaxLoopDeepth 0 ctx.SimpleQuries ctx.Expand ctx.Filter
 
     member ctx.MergeInto(target: ODataQueryContext<'T>) =
         for KeyValue (k, v) in ctx.SimpleQuries do
@@ -125,7 +139,7 @@ type ODataQueryBuilder<'T>() =
 
     member inline _.Run(ctx: ODataQueryContext<'T>) = ctx
 
-    member inline _.Run(filter: ODataFilterContext<'T>) =
+    member inline _.Run(filter: ODataFilterContext<'Filter>) =
         let ctx = ODataQueryContext<'T>()
         ctx.Filter.Add(filter.ToQuery())
         ctx
@@ -136,23 +150,23 @@ type ODataQueryBuilder<'T>() =
 
     member inline _.Yield(x: ODataQueryContext<'T>) = x
 
-    member inline _.Yield(x: ODataFilterContext<'T>) = x
+    member inline _.Yield(x: ODataFilterContext<'Filter>) = x
 
     member inline _.Delay([<InlineIfLambda>] fn) = fn ()
 
     member inline _.For(ctx: ODataQueryContext<'T>, [<InlineIfLambda>] fn: unit -> ODataQueryContext<'T>) = fn().MergeInto(ctx)
 
-    member inline _.For(ctx: ODataQueryContext<'T>, [<InlineIfLambda>] fn: unit -> ODataFilterContext<'T>) =
+    member inline _.For(ctx: ODataQueryContext<'T>, [<InlineIfLambda>] fn: unit -> ODataFilterContext<'Filter>) =
         ctx.Filter.Add(fn().ToQuery())
         ctx
 
     member inline _.Combine(x: ODataQueryContext<'T>, y: ODataQueryContext<'T>) = y.MergeInto(x)
 
-    member inline _.Combine(ctx: ODataQueryContext<'T>, filter: ODataFilterContext<'T>) =
+    member inline _.Combine(ctx: ODataQueryContext<'T>, filter: ODataFilterContext<'Filter>) =
         ctx.Filter.Add(filter.ToQuery())
         ctx
 
-    member inline _.Combine(filter: ODataFilterContext<'T>, ctx: ODataQueryContext<'T>) =
+    member inline _.Combine(filter: ODataFilterContext<'Filter>, ctx: ODataQueryContext<'T>) =
         ctx.Filter.Add(filter.ToQuery())
         ctx
 
@@ -168,6 +182,11 @@ type ODataQueryBuilder<'T>() =
     [<CustomOperation("disableAutoExpand")>]
     member inline _.DisableAutoExpand(ctx: ODataQueryContext<'T>) =
         ctx.DisableAutoExpand <- true
+        ctx
+
+    [<CustomOperation("maxLoopDeepth")>]
+    member inline _.maxLoopDeepth(ctx: ODataQueryContext<'T>, max: int) =
+        ctx.MaxLoopDeepth <- if max > 0 then max else 0
         ctx
 
 
@@ -229,6 +248,11 @@ type ODataQueryBuilder<'T>() =
         ctx.Expand[ getExpressionName prop ] <- expandCtx.ToQuery(";")
         ctx
 
+    [<CustomOperation("expandPoco")>]
+    member inline _.Expand(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop option>>, expandCtx: ODataQueryContext<'Prop>) =
+        ctx.Expand[ getExpressionName prop ] <- expandCtx.ToQuery(";")
+        ctx
+
     [<CustomOperation("expandList")>]
     member inline _.ExpandList(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, IEnumerable<'Prop>>>) =
         ctx.Expand[ getExpressionName prop ] <- sprintf "$select=%s" (generateSelectQueryByType false typeof<'Prop>)
@@ -255,7 +279,7 @@ type ODataQueryBuilder<'T>() =
         | Some filter -> this.Filter(ctx, filter)
 
     [<CustomOperation("filter")>]
-    member inline _.Filter(ctx: ODataQueryContext<'T>, filter: ODataFilterContext<_>) =
+    member inline _.Filter(ctx: ODataQueryContext<'T>, filter: ODataFilterContext<'Filter>) =
         ctx.Filter.Add(filter.ToQuery())
         ctx
 
@@ -400,7 +424,7 @@ type OdataQuery<'T>() =
     inherit ODataQueryBuilder<'T>()
 
     member _.Run(ctx: ODataQueryContext<'T>) = ctx.ToQuery()
-    member _.Run(ctx: ODataFilterContext<'T>) = base.Run(ctx).ToQuery()
+    member _.Run(ctx: ODataFilterContext<'Filter>) = base.Run(ctx).ToQuery()
 
 type OdataOrQuery<'T>() =
     inherit ODataOrFilterBuilder<'T>()

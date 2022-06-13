@@ -159,3 +159,40 @@ let ``Test yield filter directly generation`` () =
         }
     }
     |> expectQuery "$select=Phone,Email&$count=true&$top=10&$filter=(contains(Phone, '123')) and (contains(Email, '456'))"
+
+    odataQuery<Contact> {
+        filterAnd<{| Address: string option |}> {
+            contains (fun x -> x.Address) "123"
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=(contains(Address, '123'))"
+    
+    
+type LoopNav = { Id: int; LoopNav: LoopNav option }
+type LoopData = { Id: int; LoopNav: LoopNav option }
+
+[<Fact>]
+let ``Test loop reference expand`` () =
+    odataQuery<LoopData> { 
+        expandPoco (fun x -> x.LoopNav) (
+            odata<LoopNav> { 
+                expandPoco (fun x -> x.LoopNav)
+            }
+        )
+    }
+    |> expectQuery "$select=Id,LoopNav&$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav))"
+    
+    odataQuery<LoopData> { empty }
+    |> expectQuery "$select=Id,LoopNav&$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav)))"
+    
+    odataQuery<LoopData> { maxLoopDeepth 2 }
+    |> expectQuery "$select=Id,LoopNav&$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav))))"
+
+    odataQuery<LoopData> {
+        expandPoco (fun x -> x.LoopNav) (
+            odata<LoopNav> { 
+                maxLoopDeepth 2
+            }
+        )
+    }
+    |> expectQuery "$select=Id,LoopNav&$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav))))"
