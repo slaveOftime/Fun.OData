@@ -206,13 +206,6 @@ let ``Test yield filter directly generation`` () =
     |> expectQuery "$select=Phone,Email&$filter=(Address eq 1 and Address lt 2 and Address gt 3)"
 
     odataQuery<Contact> {
-        filterAnd<{| CreatedAt: DateTime option |}> {
-            eq (fun x -> x.CreatedAt) (DateTime(2022, 1, 1))
-        }
-    }
-    |> expectQuery "$select=Phone,Email&$filter=(CreatedAt eq '1/1/2022 12:00:00 AM')"
-    
-    odataQuery<Contact> {
         filterAnd<{| Room: int option |}> {
             eq (fun x -> x.Room) (Some 1)
         }

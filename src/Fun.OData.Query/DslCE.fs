@@ -299,7 +299,6 @@ type ODataFilterBuilder<'T>(oper: string) =
             let handle (value: obj) =
                 match value with
                 | :? string as x -> builder (box ("'" + x + "'"))
-                | :? DateTime as x -> builder (box ("'" + x.ToString() + "'"))
                 | x -> builder (x)
 
             let ty = value.GetType()
