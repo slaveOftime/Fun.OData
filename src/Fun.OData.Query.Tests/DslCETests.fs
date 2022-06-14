@@ -262,3 +262,25 @@ let ``Test loop reference expand`` () =
         )
     }
     |> expectQuery "$select=Id,LoopNav&$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav))))"
+
+
+[<Fact>]
+let ``orderBy with multiple fields`` () =
+    odataQuery<Contact> {
+        orderBy (fun x -> x.Phone)
+        orderBy (fun x -> x.Email)
+    }
+    |> expectQuery "$select=Phone,Email&$orderBy=Phone,Email"
+
+    odataQuery<Contact> {
+        orderByDesc (fun x -> x.Phone)
+        orderByDesc (fun x -> x.Email)
+    }
+    |> expectQuery "$select=Phone,Email&$orderBy=Phone desc,Email desc"
+
+    odataQuery<Contact> {
+        orderBy (fun x -> x.Phone)
+        orderByDesc (fun x -> x.Email)
+    }
+    |> expectQuery "$select=Phone,Email&$orderBy=Phone,Email desc"
+    

@@ -118,6 +118,12 @@ type ODataQueryContext<'T>() =
 
         target
 
+    member inline ctx.SetOrderBy(value) =
+        match ctx.SimpleQuries.TryGetValue "$orderBy" with
+        | true, str -> ctx.SimpleQuries[ "$orderBy" ] <- str + "," + value
+        | _ -> ctx.SimpleQuries.Add("$orderBy", value)
+        ctx
+
 
 type ODataFilterContext<'T>(operator: string, filter: FilterCombinator) =
 
@@ -135,6 +141,9 @@ type ODataFilterContext<'T>(operator: string, filter: FilterCombinator) =
 
 
 type ODataQueryBuilder<'T>() =
+
+
+
 
     member inline _.Run(ctx: ODataQueryContext<'T>) = ctx
 
@@ -216,25 +225,18 @@ type ODataQueryBuilder<'T>() =
         | None -> ctx
         | Some num -> this.Skip(ctx, num)
 
-    [<CustomOperation("orderBy")>]
-    member inline _.OrderBy(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) =
-        ctx.SimpleQuries[ "$orderBy" ] <- getExpressionName prop
-        ctx
 
     [<CustomOperation("orderBy")>]
-    member inline _.OrderBy(ctx: ODataQueryContext<'T>, x: string) =
-        ctx.SimpleQuries[ "$orderBy" ] <- x
-        ctx
+    member inline _.OrderBy(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) = ctx.SetOrderBy(getExpressionName prop)
+
+    [<CustomOperation("orderBy")>]
+    member inline _.OrderBy(ctx: ODataQueryContext<'T>, x: string) = ctx.SetOrderBy x
 
     [<CustomOperation("orderByDesc")>]
-    member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) =
-        ctx.SimpleQuries[ "$orderBy" ] <- getExpressionName prop + " desc"
-        ctx
+    member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) = ctx.SetOrderBy(getExpressionName prop + " desc")
 
     [<CustomOperation("orderByDesc")>]
-    member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, x: string) =
-        ctx.SimpleQuries[ "$orderBy" ] <- x + " desc"
-        ctx
+    member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, x: string) = ctx.SetOrderBy(x + " desc")
 
 
     [<CustomOperation("expandPoco")>]

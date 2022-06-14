@@ -1,9 +1,9 @@
 name: Build and publish nuget packages
 
 on:
-  push:
-    branches:
-    - master
+  #push:
+  #  branches:
+  #  - master
   release:
     types: [published]
     
