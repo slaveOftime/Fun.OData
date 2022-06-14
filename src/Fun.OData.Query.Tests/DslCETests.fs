@@ -38,8 +38,8 @@ let ``Test query generation`` () =
     odataQuery<Person> {
         filter (
             filterAnd {
-                gt (fun x -> x.Age) "10"
-                lt (fun x -> x.Age) "20"
+                gt (fun x -> x.Age) 10
+                lt (fun x -> x.Age) 20
             }
         )
     }
@@ -179,7 +179,7 @@ let ``Test yield filter directly generation`` () =
     |> expectQuery "$select=Phone,Email"
     
     odataQuery<Contact> {
-        filterAnd<{| Address: int option |}> {
+        filterAnd<{| Address: int |}> {
             eq (fun x -> x.Address) 1
             lt (fun x -> x.Address) 2
             gt (fun x -> x.Address) 3
@@ -187,6 +187,59 @@ let ``Test yield filter directly generation`` () =
     }
     |> expectQuery "$select=Phone,Email&$filter=(Address eq 1 and Address lt 2 and Address gt 3)"
     
+    odataQuery<Contact> {
+        filterAnd<{| Address: int option |}> {
+            eq (fun x -> x.Address) 1
+            lt (fun x -> x.Address) 2
+            gt (fun x -> x.Address) 3
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=(Address eq 1 and Address lt 2 and Address gt 3)"
+
+    odataQuery<Contact> {
+        filterAnd {
+            eq "Address" 1
+            lt "Address" 2
+            gt "Address" 3
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=(Address eq 1 and Address lt 2 and Address gt 3)"
+
+    odataQuery<Contact> {
+        filterAnd<{| CreatedAt: DateTime option |}> {
+            eq (fun x -> x.CreatedAt) (DateTime(2022, 1, 1))
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=(CreatedAt eq '1/1/2022 12:00:00 AM')"
+    
+    odataQuery<Contact> {
+        filterAnd<{| Room: int option |}> {
+            eq (fun x -> x.Room) (Some 1)
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=(Room eq 1)"
+    
+    odataQuery<Contact> {
+        filterAnd<{| Address: string option |}> {
+            eq (fun x -> x.Address) ""
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=(Address eq '')"
+
+    odataQuery<Contact> {
+        filterAnd<{| Address: string |}> {
+            eq (fun x -> x.Address) (Some "123")
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=(Address eq '123')"
+
+    odataQuery<Contact> {
+        filterAnd<{| Address: string |}> {
+            eq (fun x -> x.Address) None
+        }
+    }
+    |> expectQuery "$select=Phone,Email"
+
     
 type LoopNav = { Id: int; LoopNav: LoopNav option }
 type LoopData = { Id: int; LoopNav: LoopNav option }

@@ -292,6 +292,28 @@ type ODataQueryBuilder<'T>() =
 
 type ODataFilterBuilder<'T>(oper: string) =
 
+    let buildFilter (ctx: FilterCombinator) (value: obj) (builder) =
+        if isNull value then
+            ctx
+        else
+            let handle (value: obj) =
+                match value with
+                | :? string as x -> builder (box ("'" + x + "'"))
+                | :? DateTime as x -> builder (box ("'" + x.ToString() + "'"))
+                | x -> builder (x)
+
+            let ty = value.GetType()
+
+            if FSharpType.IsUnion ty then
+                let info, fields = FSharpValue.GetUnionFields(value, ty)
+                if info.DeclaringType.FullName.StartsWith "Microsoft.FSharp.Core.FSharpOption`1" then
+                    if info.Name = "Some" then handle (fields[0]) else ctx
+                else
+                    handle value
+            else
+                handle value
+
+
     member val Operator = oper
 
 
@@ -323,99 +345,46 @@ type ODataFilterBuilder<'T>(oper: string) =
 
 
     [<CustomOperation("eq")>]
-    member inline this.EQ([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string) =
-        if String.IsNullOrEmpty x then
-            ctx
-        else
-            FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(getExpressionName prop).Append(" eq ").Append(x))
+    member this.EQ(ctx: FilterCombinator, name: string, value: obj) =
+        let builder (x: obj) = FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(name).Append(" eq ").Append(x))
+        buildFilter ctx value builder
 
     [<CustomOperation("eq")>]
-    member inline this.EQ([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string option) =
-        match x with
-        | None -> ctx
-        | Some x -> this.EQ(ctx, prop, x)
-
-    [<CustomOperation("eq")>]
-    member inline this.EQ([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop) =
-        if box x |> isNull then ctx else this.EQ(ctx, prop, x.ToString())
-
-    [<CustomOperation("eq")>]
-    member inline this.EQ([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop option>>, x: 'Prop) =
-        if box x |> isNull then ctx else this.EQ(ctx, prop, x.ToString())
-
-    [<CustomOperation("eq")>]
-    member inline this.EQ([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop option) =
-        this.EQ(ctx, prop, Option.map string x)
-
-
-    [<CustomOperation("gt")>]
-    member inline this.GT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string) =
-        if String.IsNullOrEmpty x then
-            ctx
-        else
-            FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(getExpressionName prop).Append(" gt ").Append(x))
-
-    [<CustomOperation("gt")>]
-    member inline this.GT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string option) =
-        match x with
-        | None -> ctx
-        | Some x -> this.GT(ctx, prop, x)
-
-    [<CustomOperation("gt")>]
-    member inline this.GT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop) =
-        if box x |> isNull then ctx else this.GT(ctx, prop, x.ToString())
-
-    [<CustomOperation("gt")>]
-    member inline this.GT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop option>>, x: 'Prop) =
-        if box x |> isNull then ctx else this.GT(ctx, prop, x.ToString())
-
-    [<CustomOperation("gt")>]
-    member inline this.GT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop option) =
-        this.GT(ctx, prop, Option.map string x)
+    member this.EQ(ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: obj) = this.EQ(ctx, getExpressionName prop, value)
 
 
     [<CustomOperation("lt")>]
-    member inline this.LT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string) =
-        if String.IsNullOrEmpty x then
-            ctx
-        else
-            FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(getExpressionName prop).Append(" lt ").Append(x))
+    member this.LT(ctx: FilterCombinator, name: string, value: obj) =
+        let builder (x: obj) = FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(name).Append(" lt ").Append(x))
+        buildFilter ctx value builder
 
     [<CustomOperation("lt")>]
-    member inline this.LT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string option) =
-        match x with
-        | None -> ctx
-        | Some x -> this.LT(ctx, prop, x)
+    member this.LT(ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: obj) = this.LT(ctx, getExpressionName prop, value)
 
-    [<CustomOperation("lt")>]
-    member inline this.LT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop) =
-        if box x |> isNull then ctx else this.LT(ctx, prop, x.ToString())
 
-    [<CustomOperation("lt")>]
-    member inline this.LT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop option>>, x: 'Prop) =
-        if box x |> isNull then ctx else this.LT(ctx, prop, x.ToString())
+    [<CustomOperation("gt")>]
+    member this.GT(ctx: FilterCombinator, name: string, value: obj) =
+        let builder (x: obj) = FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(name).Append(" gt ").Append(x))
+        buildFilter ctx value builder
 
-    [<CustomOperation("lt")>]
-    member inline this.LT([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: 'Prop option) =
-        this.LT(ctx, prop, Option.map string x)
+    [<CustomOperation("gt")>]
+    member this.GT(ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: obj) = this.GT(ctx, getExpressionName prop, value)
 
 
     [<CustomOperation("contains")>]
-    member inline this.Contains([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string) =
-        FilterCombinator(fun sb ->
+    member inline this.Contains([<InlineIfLambda>] ctx: FilterCombinator, name: string, value: string) =
+        if isNull value then
             ctx
-                .Invoke(sb)
-                .Append(this.Operator)
-                .Append("contains(")
-                .Append(getExpressionName prop)
-                .Append(", '")
-                .Append(x)
-                .Append("')")
-        )
+        else
+            FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append("contains(").Append(name).Append(", '").Append(value).Append("')"))
 
     [<CustomOperation("contains")>]
-    member inline this.Contains([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, x: string option) =
-        match x with
+    member inline this.Contains([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: string) =
+        this.Contains(ctx, getExpressionName prop, value)
+
+    [<CustomOperation("contains")>]
+    member inline this.Contains([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: string option) =
+        match value with
         | None -> ctx
         | Some x -> this.Contains(ctx, prop, x)
 

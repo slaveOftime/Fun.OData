@@ -177,19 +177,18 @@ Query.generateFor<
 
 ## Benchmarks
 
-|                  Method |         Mean |       Error |      StdDev |       Median |  Gen 0 |  Gen 1 | Allocated |
-|------------------------ |-------------:|------------:|------------:|-------------:|-------:|-------:|----------:|
-|         AnonymousWithDU | 170,828.6 ns | 3,402.75 ns | 3,640.90 ns | 170,353.6 ns | 9.5215 |      - |     60 KB |
-|         AnonymousWithCE | 114,684.6 ns | 1,323.87 ns | 1,033.59 ns | 114,856.8 ns | 5.1270 |      - |     32 KB |
-|       CustomQueryWithDU |  15,855.2 ns |   313.21 ns |   618.24 ns |  15,601.1 ns | 1.4343 |      - |      9 KB |
-|       CustomQueryWithCE |  11,416.7 ns |   187.83 ns |   166.50 ns |  11,408.3 ns | 0.7172 |      - |      4 KB |
-|          FilterWithList |   1,206.5 ns |    23.71 ns |    45.11 ns |   1,209.1 ns | 0.2956 |      - |      2 KB |
-|  FilterWithReflectionCE |  82,849.4 ns | 1,553.95 ns | 1,662.71 ns |  82,346.8 ns | 8.7891 | 0.1221 |     54 KB |
-|    FilterWithOptionList |   1,232.4 ns |    21.79 ns |    27.56 ns |   1,229.3 ns | 0.3223 |      - |      2 KB |
-| FilterWithOptionPlainCE |     940.3 ns |    18.12 ns |    25.41 ns |     938.0 ns | 0.3462 | 0.0010 |      2 KB |
-|          OverrideWithDU |  29,617.0 ns |   510.80 ns |   477.80 ns |  29,554.6 ns | 1.8616 |      - |     11 KB |
-|          OverrideWithCE |  20,866.2 ns |   414.14 ns |   345.82 ns |  20,864.4 ns | 0.9155 |      - |      6 KB |
-
+|                  Method |         Mean |       Error |      StdDev |       Median |   Gen 0 |  Gen 1 | Allocated |
+|------------------------ |-------------:|------------:|------------:|-------------:|--------:|-------:|----------:|
+|         AnonymousWithDU | 177,451.1 ns | 3,316.00 ns | 6,146.42 ns | 175,928.9 ns | 10.0098 |      - |     62 KB |
+|         AnonymousWithCE | 113,811.4 ns | 1,239.00 ns | 1,158.97 ns | 113,960.2 ns |  5.1270 |      - |     32 KB |
+|       CustomQueryWithDU |  16,905.9 ns |   335.33 ns |   638.01 ns |  16,650.8 ns |  1.4648 |      - |      9 KB |
+|       CustomQueryWithCE |  11,405.1 ns |   131.92 ns |   123.40 ns |  11,412.7 ns |  0.7172 |      - |      4 KB |
+|          FilterWithList |   1,181.2 ns |    23.32 ns |    54.05 ns |   1,160.7 ns |  0.2956 |      - |      2 KB |
+|  FilterWithReflectionCE | 103,187.4 ns | 1,537.92 ns | 1,438.57 ns | 102,927.2 ns |  9.3994 | 0.1221 |     58 KB |
+|    FilterWithOptionList |   1,188.1 ns |    19.89 ns |    18.60 ns |   1,185.2 ns |  0.3223 |      - |      2 KB |
+| FilterWithOptionPlainCE |     960.9 ns |    18.06 ns |    35.66 ns |     951.5 ns |  0.3452 |      - |      2 KB |
+|          OverrideWithDU |  29,714.3 ns |   575.33 ns |   806.53 ns |  29,414.6 ns |  1.8921 |      - |     12 KB |
+|          OverrideWithCE |  20,597.7 ns |   319.26 ns |   298.64 ns |  20,554.2 ns |  0.9155 |      - |      6 KB |
 
 ## Server side [Deprecated]
 
