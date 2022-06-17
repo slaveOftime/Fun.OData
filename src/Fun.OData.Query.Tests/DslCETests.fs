@@ -91,7 +91,7 @@ let ``Test query generation`` () =
         }
     }
     |> expectQuery
-        "$select=Name,Age,Contact,Addresses&$count=true&$skip=5&$top=10&$orderBy=Name&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room;$count=true)&$filter=((custom-filter) and Age gt 10 and Age lt 20 and (contains(Name, 'test1') or (custom1) or (custom2) or (custom3(Age)) or (custom4(Age)) or (Age gt 10 and Age lt 20)))"
+        "$select=Name,Age,Contact,Addresses&$count=true&$skip=5&$top=10&$orderby=Name&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room;$count=true)&$filter=((custom-filter) and Age gt 10 and Age lt 20 and (contains(Name, 'test1') or (custom1) or (custom2) or (custom3(Age)) or (custom4(Age)) or (Age gt 10 and Age lt 20)))"
 
 
     odataQuery<{| Id: int
@@ -270,17 +270,17 @@ let ``orderBy with multiple fields`` () =
         orderBy (fun x -> x.Phone)
         orderBy (fun x -> x.Email)
     }
-    |> expectQuery "$select=Phone,Email&$orderBy=Phone,Email"
+    |> expectQuery "$select=Phone,Email&$orderby=Phone,Email"
 
     odataQuery<Contact> {
         orderByDesc (fun x -> x.Phone)
         orderByDesc (fun x -> x.Email)
     }
-    |> expectQuery "$select=Phone,Email&$orderBy=Phone desc,Email desc"
+    |> expectQuery "$select=Phone,Email&$orderby=Phone desc,Email desc"
 
     odataQuery<Contact> {
         orderBy (fun x -> x.Phone)
         orderByDesc (fun x -> x.Email)
     }
-    |> expectQuery "$select=Phone,Email&$orderBy=Phone,Email desc"
+    |> expectQuery "$select=Phone,Email&$orderby=Phone,Email desc"
     

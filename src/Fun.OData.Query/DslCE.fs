@@ -119,11 +119,12 @@ type ODataQueryContext<'T>() =
         target
 
     member inline ctx.SetOrderBy(value) =
-        match ctx.SimpleQuries.TryGetValue "$orderBy" with
-        | true, str -> ctx.SimpleQuries[ "$orderBy" ] <- str + "," + value
-        | _ -> ctx.SimpleQuries.Add("$orderBy", value)
+        let key = "$orderby"
+        match ctx.SimpleQuries.TryGetValue key with
+        | true, str -> ctx.SimpleQuries[ key ] <- str + "," + value
+        | _ -> ctx.SimpleQuries.Add(key, value)
         ctx
-
+        
 
 type ODataFilterContext<'T>(operator: string, filter: FilterCombinator) =
 
