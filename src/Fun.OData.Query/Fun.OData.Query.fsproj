@@ -2,7 +2,7 @@
 
 	<PropertyGroup>
 		<TargetFramework>netstandard2.0</TargetFramework>
-		<Version>2.1.5</Version>
+		<Version>2.1.6</Version>
 		<Description>This is a simple queries generator for consume odata apis (only for GET)</Description>
 		<PackageProjectUrl>https://github.com/albertwoo/Fun.OData</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/albertwoo/Fun.OData</RepositoryUrl>
