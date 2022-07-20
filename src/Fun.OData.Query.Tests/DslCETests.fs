@@ -284,3 +284,14 @@ let ``orderBy with multiple fields`` () =
     }
     |> expectQuery "$select=Phone,Email&$orderby=Phone,Email desc"
     
+
+[<Fact>]
+let ``ne should work`` () =
+    odataQuery<Contact> {
+        filterAnd {
+            ne "Phone" "123"
+            ne (fun x -> x.Email) "456"
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=(Phone ne '123' and Email ne '456')"
+    

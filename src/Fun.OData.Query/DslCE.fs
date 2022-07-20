@@ -355,6 +355,15 @@ type ODataFilterBuilder<'T>(oper: string) =
     member this.EQ(ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: obj) = this.EQ(ctx, getExpressionName prop, value)
 
 
+    [<CustomOperation("ne")>]
+    member this.NE(ctx: FilterCombinator, name: string, value: obj) =
+        let builder (x: obj) = FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(name).Append(" ne ").Append(x))
+        buildFilter ctx value builder
+
+    [<CustomOperation("ne")>]
+    member this.NE(ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: obj) = this.NE(ctx, getExpressionName prop, value)
+
+
     [<CustomOperation("lt")>]
     member this.LT(ctx: FilterCombinator, name: string, value: obj) =
         let builder (x: obj) = FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(name).Append(" lt ").Append(x))
