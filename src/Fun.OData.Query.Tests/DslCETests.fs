@@ -294,4 +294,23 @@ let ``ne should work`` () =
         }
     }
     |> expectQuery "$select=Phone,Email&$filter=(Phone ne '123' and Email ne '456')"
-    
+  
+  
+[<Fact>]
+let ``yield list of string should work for filter`` () =
+    odataQuery<Contact> {
+        filterAnd {
+            [
+                Filter.contains "Phone" "123"
+                Filter.eq "Email" "456"
+            ]
+            filterOr {
+                [
+                    "test1"
+                    Filter.ne "Email" "test2"
+                ]
+                [] // should do nothing
+            }
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=((contains(Phone, '123')) and (Email eq 456) and ((test1) or (Email ne test2)))"

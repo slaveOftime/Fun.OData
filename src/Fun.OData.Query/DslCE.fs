@@ -325,6 +325,13 @@ type ODataFilterBuilder<'T>(oper: string) =
     member inline _.Yield(_: unit) = emptyFilterCombinator
 
     member inline this.Yield(x: string) = FilterCombinator(fun sb -> sb.Append(this.Operator).Append("(").Append(x).Append(")"))
+    
+    member inline this.Yield(expressions: string seq) = 
+        FilterCombinator(fun sb -> 
+            for expression in expressions do
+                sb.Append(this.Operator).Append("(").Append(expression).Append(")") |> ignore
+            sb
+        )
 
     member inline this.Yield(x: ODataFilterContext<'T>) =
         FilterCombinator(fun sb -> sb.Append(this.Operator).Append("(").Append(x.ToQuery()).Append(")"))
