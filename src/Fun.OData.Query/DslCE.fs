@@ -26,6 +26,7 @@ module Internal =
         (simpleQuries: Dictionary<string, string>)
         (expands: Dictionary<string, string>)
         (filter: List<string>)
+        (excludedFields: string list)
         =
         let sb = StringBuilder()
         let fields = FSharpType.GetRecordFields(ty)
@@ -35,9 +36,10 @@ module Internal =
 
         let mutable i = 0
         for field in fields do
-            if i > 0 then sb.Append(",") |> ignore
-            sb.Append(field.Name) |> ignore
-            i <- i + 1
+            if excludedFields |> List.contains field.Name |> not then
+                if i > 0 then sb.Append(",") |> ignore
+                sb.Append(field.Name) |> ignore
+                i <- i + 1
 
 
         if simpleQuries <> null && simpleQuries.Count > 0 then
@@ -51,10 +53,11 @@ module Internal =
             if expands = null then expands <- Dictionary<string, string>()
 
             for field in fields do
-                if expands.ContainsKey field.Name |> not then
+                if expands.ContainsKey field.Name |> not && not (excludedFields |> List.contains field.Name) then
                     if FSharpType.IsRecord field.PropertyType then
                         if field.PropertyType = ty then failwith "Recursive record is not supported"
-                        expands[field.Name] <- (generateQuery field.PropertyType ";" false loopDeepthMax loopDeepth null null null).ToString()
+                        expands[field.Name] <-
+                            (generateQuery field.PropertyType ";" false loopDeepthMax loopDeepth null null null List.Empty).ToString()
                     elif FSharpType.IsRecordOption field.PropertyType
                          && (field.PropertyType.GenericTypeArguments[0] <> ty || loopDeepth <= loopDeepthMax) then
                         let nextLoopDeepth =
@@ -63,22 +66,28 @@ module Internal =
                             else
                                 loopDeepth
                         expands[field.Name] <-
-                            (generateQuery field.PropertyType.GenericTypeArguments[0] ";" false loopDeepthMax nextLoopDeepth null null null)
+                            (generateQuery field.PropertyType.GenericTypeArguments[0] ";" false loopDeepthMax nextLoopDeepth null null null List.Empty)
                                 .ToString()
                     else
                         match FSharpType.TryGetIEnumeralbleGenericType field.PropertyType with
                         | Some ty when field.PropertyType <> ty || loopDeepth <= loopDeepthMax ->
                             let nextLoopDeepth = if field.PropertyType = ty then loopDeepth + 1 else loopDeepth
-                            expands[field.Name] <- (generateQuery ty ";" false loopDeepthMax nextLoopDeepth null null null).ToString()
+                            expands[field.Name] <- (generateQuery ty ";" false loopDeepthMax nextLoopDeepth null null null List.Empty).ToString()
                         | _ -> ()
 
-        if expands <> null && expands.Count > 0 then
+        let filteredExpands =
+            if expands = null then
+                []
+            else
+                expands |> Seq.filter (fun (KeyValue (k, _)) -> excludedFields |> List.contains k |> not) |> Seq.toList
+
+        if filteredExpands.Length > 0 then
             let mutable i = 0
             sb.Append(combinator).Append("$expand=") |> ignore
-            for KeyValue (k, v) in expands do
+            for KeyValue (k, v) in filteredExpands do
                 if i > 0 then sb.Append(",") |> ignore
                 if String.IsNullOrEmpty v |> not then
-                    sb.Append(k).Append("(").Append(expands[k]).Append(")") |> ignore
+                    sb.Append(k).Append("(").Append(v).Append(")") |> ignore
                 else
                     sb.Append(k) |> ignore
                 i <- i + 1
@@ -102,11 +111,21 @@ type ODataQueryContext<'T>() =
     member val SimpleQuries = Dictionary<string, string>()
     member val Expand = Dictionary<string, string>()
     member val Filter = List<string>()
+    member val ExcludedFields = List<string>()
     member val DisableAutoExpand = false with get, set
     member val MaxLoopDeepth = 1 with get, set
 
     member ctx.ToQuery(?combinator) =
-        generateQuery typeof<'T> (defaultArg combinator "&") ctx.DisableAutoExpand ctx.MaxLoopDeepth 0 ctx.SimpleQuries ctx.Expand ctx.Filter
+        generateQuery
+            typeof<'T>
+            (defaultArg combinator "&")
+            ctx.DisableAutoExpand
+            ctx.MaxLoopDeepth
+            0
+            ctx.SimpleQuries
+            ctx.Expand
+            ctx.Filter
+            (ctx.ExcludedFields |> Seq.toList)
 
     member ctx.MergeInto(target: ODataQueryContext<'T>) =
         for KeyValue (k, v) in ctx.SimpleQuries do
@@ -115,6 +134,7 @@ type ODataQueryContext<'T>() =
             target.Expand[ k ] <- v
         target.Filter.AddRange ctx.Filter
         target.DisableAutoExpand <- ctx.DisableAutoExpand
+        target.ExcludedFields.AddRange ctx.ExcludedFields
 
         target
 
@@ -124,7 +144,7 @@ type ODataQueryContext<'T>() =
         | true, str -> ctx.SimpleQuries[ key ] <- str + "," + value
         | _ -> ctx.SimpleQuries.Add(key, value)
         ctx
-        
+
 
 type ODataFilterContext<'T>(operator: string, filter: FilterCombinator) =
 
@@ -142,9 +162,6 @@ type ODataFilterContext<'T>(operator: string, filter: FilterCombinator) =
 
 
 type ODataQueryBuilder<'T>() =
-
-
-
 
     member inline _.Run(ctx: ODataQueryContext<'T>) = ctx
 
@@ -196,6 +213,12 @@ type ODataQueryBuilder<'T>() =
     [<CustomOperation("maxLoopDeepth")>]
     member inline _.maxLoopDeepth(ctx: ODataQueryContext<'T>, max: int) =
         ctx.MaxLoopDeepth <- if max > 0 then max else 0
+        ctx
+
+    /// With this we can support use case like backward compatibility of database changes
+    [<CustomOperation("excludeSelect")>]
+    member inline _.ExcludeSelect(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) =
+        ctx.ExcludedFields.Add(getExpressionName prop)
         ctx
 
 
@@ -325,9 +348,9 @@ type ODataFilterBuilder<'T>(oper: string) =
     member inline _.Yield(_: unit) = emptyFilterCombinator
 
     member inline this.Yield(x: string) = FilterCombinator(fun sb -> sb.Append(this.Operator).Append("(").Append(x).Append(")"))
-    
-    member inline this.Yield(expressions: string seq) = 
-        FilterCombinator(fun sb -> 
+
+    member inline this.Yield(expressions: string seq) =
+        FilterCombinator(fun sb ->
             for expression in expressions do
                 sb.Append(this.Operator).Append("(").Append(expression).Append(")") |> ignore
             sb

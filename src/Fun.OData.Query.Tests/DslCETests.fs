@@ -314,3 +314,19 @@ let ``yield list of string should work for filter`` () =
         }
     }
     |> expectQuery "$select=Phone,Email&$filter=((contains(Phone, '123')) and (Email eq 456) and ((test1) or (Email ne test2)))"
+
+
+[<Fact>]
+let ``exclude should work`` () =
+    odataQuery<Person> {
+        excludeSelect (fun x -> x.Age)
+        if true then odata<Person> { excludeSelect (fun x -> x.Addresses) }
+    }
+    |> expectQuery "$select=Name,Contact&$expand=Contact($select=Phone,Email)"
+
+    odataQuery<Person> {
+        excludeSelect (fun x -> x.Age)
+        excludeSelect (fun x -> x.Contact)
+        excludeSelect (fun x -> x.Addresses)
+    }
+    |> expectQuery "$select=Name"
