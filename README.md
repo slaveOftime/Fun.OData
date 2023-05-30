@@ -36,6 +36,11 @@ http.GetStringAsync(
                 filterAnd {
                     gt (fun x -> x.Tid) 1
                     lt (fun x -> x.Tid) 10
+                    custom (fun x -> x.Tid) (sprintf "%s eq 10")
+                    // Option value is used for determine if a filter should be applied
+                    eq (fun x -> x.Tid) (Some 1) // Tid eq 1
+                    eq (fun x -> x.Tid) (Some null) // Tid eq null 
+                    eq (fun x -> x.Tid) None // Will not put in the query string
                 }
             }
         )

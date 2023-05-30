@@ -43,7 +43,7 @@ module Internal =
 
 
         if simpleQuries <> null && simpleQuries.Count > 0 then
-            for KeyValue (k, v) in simpleQuries do
+            for KeyValue(k, v) in simpleQuries do
                 sb.Append(combinator).Append(k).Append("=").Append(v) |> ignore
 
 
@@ -58,8 +58,10 @@ module Internal =
                         if field.PropertyType = ty then failwith "Recursive record is not supported"
                         expands[field.Name] <-
                             (generateQuery field.PropertyType ";" false loopDeepthMax loopDeepth null null null List.Empty).ToString()
-                    elif FSharpType.IsRecordOption field.PropertyType
-                         && (field.PropertyType.GenericTypeArguments[0] <> ty || loopDeepth <= loopDeepthMax) then
+                    elif
+                        FSharpType.IsRecordOption field.PropertyType
+                        && (field.PropertyType.GenericTypeArguments[0] <> ty || loopDeepth <= loopDeepthMax)
+                    then
                         let nextLoopDeepth =
                             if field.PropertyType.GenericTypeArguments[0] = ty then
                                 loopDeepth + 1
@@ -79,12 +81,12 @@ module Internal =
             if expands = null then
                 []
             else
-                expands |> Seq.filter (fun (KeyValue (k, _)) -> excludedFields |> List.contains k |> not) |> Seq.toList
+                expands |> Seq.filter (fun (KeyValue(k, _)) -> excludedFields |> List.contains k |> not) |> Seq.toList
 
         if filteredExpands.Length > 0 then
             let mutable i = 0
             sb.Append(combinator).Append("$expand=") |> ignore
-            for KeyValue (k, v) in filteredExpands do
+            for KeyValue(k, v) in filteredExpands do
                 if i > 0 then sb.Append(",") |> ignore
                 if String.IsNullOrEmpty v |> not then
                     sb.Append(k).Append("(").Append(v).Append(")") |> ignore
@@ -128,10 +130,10 @@ type ODataQueryContext<'T>() =
             (ctx.ExcludedFields |> Seq.toList)
 
     member ctx.MergeInto(target: ODataQueryContext<'T>) =
-        for KeyValue (k, v) in ctx.SimpleQuries do
-            target.SimpleQuries[ k ] <- v
-        for KeyValue (k, v) in ctx.Expand do
-            target.Expand[ k ] <- v
+        for KeyValue(k, v) in ctx.SimpleQuries do
+            target.SimpleQuries[k] <- v
+        for KeyValue(k, v) in ctx.Expand do
+            target.Expand[k] <- v
         target.Filter.AddRange ctx.Filter
         target.DisableAutoExpand <- ctx.DisableAutoExpand
         target.ExcludedFields.AddRange ctx.ExcludedFields
@@ -141,7 +143,7 @@ type ODataQueryContext<'T>() =
     member inline ctx.SetOrderBy(value) =
         let key = "$orderby"
         match ctx.SimpleQuries.TryGetValue key with
-        | true, str -> ctx.SimpleQuries[ key ] <- str + "," + value
+        | true, str -> ctx.SimpleQuries[key] <- str + "," + value
         | _ -> ctx.SimpleQuries.Add(key, value)
         ctx
 
@@ -224,12 +226,12 @@ type ODataQueryBuilder<'T>() =
 
     [<CustomOperation("count")>]
     member inline _.Count(ctx: ODataQueryContext<'T>) =
-        ctx.SimpleQuries[ "$count" ] <- "true"
+        ctx.SimpleQuries["$count"] <- "true"
         ctx
 
     [<CustomOperation("take")>]
     member inline _.Take(ctx: ODataQueryContext<'T>, num: int) =
-        ctx.SimpleQuries[ "$top" ] <- num.ToString()
+        ctx.SimpleQuries["$top"] <- num.ToString()
         ctx
 
     [<CustomOperation("take")>]
@@ -240,7 +242,7 @@ type ODataQueryBuilder<'T>() =
 
     [<CustomOperation("skip")>]
     member inline _.Skip(ctx: ODataQueryContext<'T>, num: int) =
-        ctx.SimpleQuries[ "$skip" ] <- num.ToString()
+        ctx.SimpleQuries["$skip"] <- num.ToString()
         ctx
 
     [<CustomOperation("skip")>]
@@ -265,27 +267,27 @@ type ODataQueryBuilder<'T>() =
 
     [<CustomOperation("expandPoco")>]
     member inline _.Expand(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) =
-        ctx.Expand[ getExpressionName prop ] <- sprintf "$select=%s" (generateSelectQueryByType false typeof<'Prop>)
+        ctx.Expand[getExpressionName prop] <- sprintf "$select=%s" (generateSelectQueryByType false typeof<'Prop>)
         ctx
 
     [<CustomOperation("expandPoco")>]
     member inline _.Expand(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>, expandCtx: ODataQueryContext<'Prop>) =
-        ctx.Expand[ getExpressionName prop ] <- expandCtx.ToQuery(";")
+        ctx.Expand[getExpressionName prop] <- expandCtx.ToQuery(";")
         ctx
 
     [<CustomOperation("expandPoco")>]
     member inline _.Expand(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop option>>, expandCtx: ODataQueryContext<'Prop>) =
-        ctx.Expand[ getExpressionName prop ] <- expandCtx.ToQuery(";")
+        ctx.Expand[getExpressionName prop] <- expandCtx.ToQuery(";")
         ctx
 
     [<CustomOperation("expandList")>]
     member inline _.ExpandList(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, IEnumerable<'Prop>>>) =
-        ctx.Expand[ getExpressionName prop ] <- sprintf "$select=%s" (generateSelectQueryByType false typeof<'Prop>)
+        ctx.Expand[getExpressionName prop] <- sprintf "$select=%s" (generateSelectQueryByType false typeof<'Prop>)
         ctx
 
     [<CustomOperation("expandList")>]
     member inline _.ExpandList(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, IEnumerable<'Prop>>>, expandCtx: ODataQueryContext<'Prop>) =
-        ctx.Expand[ getExpressionName prop ] <- expandCtx.ToQuery(";")
+        ctx.Expand[getExpressionName prop] <- expandCtx.ToQuery(";")
         ctx
 
 
@@ -311,20 +313,22 @@ type ODataQueryBuilder<'T>() =
 
     [<CustomOperation("keyValue")>]
     member inline _.KeyValue(ctx: ODataQueryContext<'T>, key: string, value: string) =
-        ctx.SimpleQuries[ key ] <- value
+        ctx.SimpleQuries[key] <- value
         ctx
 
 
 
 type ODataFilterBuilder<'T>(oper: string) =
 
-    let buildFilter (ctx: FilterCombinator) (value: obj) (builder) =
+    let buildFilter (ctx: FilterCombinator) (value: obj) (builder: obj -> FilterCombinator) =
         if isNull value then
             ctx
         else
             let handle (value: obj) =
                 match value with
                 | :? string as x -> builder (box ("'" + x + "'"))
+                | :? bool as x -> builder (x.ToString().ToLower())
+                | null -> builder "null"
                 | x -> builder (x)
 
             let ty = value.GetType()

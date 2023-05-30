@@ -286,7 +286,7 @@ let ``orderBy with multiple fields`` () =
     
 
 [<Fact>]
-let ``ne should work`` () =
+let ``eq and ne should work`` () =
     odataQuery<Contact> {
         filterAnd {
             ne "Phone" "123"
@@ -295,6 +295,15 @@ let ``ne should work`` () =
     }
     |> expectQuery "$select=Phone,Email&$filter=(Phone ne '123' and Email ne '456')"
   
+    odataQuery<{| IsReadOnly: bool |}> {
+        filterAnd<{| IsReadOnly: bool; Name: string |}> {
+            eq (fun x -> x.IsReadOnly) true
+            ne (fun x -> x.IsReadOnly) false
+            ne (fun x -> x.Name) (Some null)
+        }
+    }
+    |> expectQuery "$select=IsReadOnly&$filter=(IsReadOnly eq true and IsReadOnly ne false and Name ne null)"
+
   
 [<Fact>]
 let ``yield list of string should work for filter`` () =
