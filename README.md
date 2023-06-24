@@ -97,6 +97,11 @@ odata<DemoDataBrief> {
             lt (fun x -> x.CreatedDate) (testFilter.FromCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
             lt (fun x -> x.CreatedDate) (testFilter.ToCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
         }
+        for i in 1..3 do // you can yield filters
+            filterAnd<{| Address: string |}> {
+                eq (fun x -> x.Address) (Some $"a{i}")
+                eq (fun x -> x.Address) (Some $"b{i}")
+            }
     }
 }
 ```

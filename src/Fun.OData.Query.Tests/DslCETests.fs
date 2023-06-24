@@ -233,6 +233,19 @@ let ``Test yield filter directly generation`` () =
     }
     |> expectQuery "$select=Phone,Email"
 
+    odataQuery<Contact> {
+        filterOr {
+            "pre"
+            for i in 1..3 do
+                filterAnd<{| Address: string |}> {
+                    eq (fun x -> x.Address) (Some $"a{i}")
+                    eq (fun x -> x.Address) (Some $"b{i}")
+                }
+            "post"
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=((pre) or (Address eq 'a1' and Address eq 'b1') or (Address eq 'a2' and Address eq 'b2') or (Address eq 'a3' and Address eq 'b3') or (post))"
+
     
 type LoopNav = { Id: int; LoopNav: LoopNav option }
 type LoopData = { Id: int; LoopNav: LoopNav option }

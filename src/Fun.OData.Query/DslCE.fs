@@ -372,6 +372,9 @@ type ODataFilterBuilder<'T>(oper: string) =
     member inline _.For(ctx: FilterCombinator, [<InlineIfLambda>] fn: unit -> FilterCombinator) =
         FilterCombinator(fun sb -> fn().Invoke(ctx.Invoke(sb)))
 
+    member inline _.For(items: 'Input seq, [<InlineIfLambda>] fn: 'Input -> FilterCombinator) =
+        FilterCombinator(fun sb -> items |> Seq.fold (fun sb item -> fn(item).Invoke(sb)) sb)
+
     member inline _.Delay([<InlineIfLambda>] fn: unit -> FilterCombinator) = FilterCombinator(fun sb -> fn().Invoke(sb))
 
     member inline _.Combine([<InlineIfLambda>] x: FilterCombinator, [<InlineIfLambda>] y: FilterCombinator) =
