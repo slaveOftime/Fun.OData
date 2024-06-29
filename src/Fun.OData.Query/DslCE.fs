@@ -2,6 +2,7 @@
 module Fun.OData.Query.DslCE
 
 open System
+open System.Web
 open System.Text
 open System.Linq.Expressions
 open System.Collections.Generic
@@ -68,13 +69,23 @@ module Internal =
                             else
                                 loopDeepth
                         expands[field.Name] <-
-                            (generateQuery field.PropertyType.GenericTypeArguments[0] ";" false loopDeepthMax nextLoopDeepth null null null List.Empty)
+                            (generateQuery
+                                field.PropertyType.GenericTypeArguments[0]
+                                ";"
+                                false
+                                loopDeepthMax
+                                nextLoopDeepth
+                                null
+                                null
+                                null
+                                List.Empty)
                                 .ToString()
                     else
                         match FSharpType.TryGetIEnumeralbleGenericType field.PropertyType with
                         | Some ty when field.PropertyType <> ty || loopDeepth <= loopDeepthMax ->
                             let nextLoopDeepth = if field.PropertyType = ty then loopDeepth + 1 else loopDeepth
-                            expands[field.Name] <- (generateQuery ty ";" false loopDeepthMax nextLoopDeepth null null null List.Empty).ToString()
+                            expands[field.Name] <-
+                                (generateQuery ty ";" false loopDeepthMax nextLoopDeepth null null null List.Empty).ToString()
                         | _ -> ()
 
         let filteredExpands =
@@ -259,7 +270,8 @@ type ODataQueryBuilder<'T>() =
     member inline _.OrderBy(ctx: ODataQueryContext<'T>, x: string) = ctx.SetOrderBy x
 
     [<CustomOperation("orderByDesc")>]
-    member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) = ctx.SetOrderBy(getExpressionName prop + " desc")
+    member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) =
+        ctx.SetOrderBy(getExpressionName prop + " desc")
 
     [<CustomOperation("orderByDesc")>]
     member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, x: string) = ctx.SetOrderBy(x + " desc")
@@ -286,7 +298,12 @@ type ODataQueryBuilder<'T>() =
         ctx
 
     [<CustomOperation("expandList")>]
-    member inline _.ExpandList(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, IEnumerable<'Prop>>>, expandCtx: ODataQueryContext<'Prop>) =
+    member inline _.ExpandList
+        (
+            ctx: ODataQueryContext<'T>,
+            prop: Expression<Func<'T, IEnumerable<'Prop>>>,
+            expandCtx: ODataQueryContext<'Prop>
+        ) =
         ctx.Expand[getExpressionName prop] <- expandCtx.ToQuery(";")
         ctx
 
@@ -326,7 +343,7 @@ type ODataFilterBuilder<'T>(oper: string) =
         else
             let handle (value: obj) =
                 match value with
-                | :? string as x -> builder (box ("'" + x + "'"))
+                | :? string as x -> builder (box ("'" + (HttpUtility.UrlEncode x) + "'"))
                 | :? bool as x -> builder (x.ToString().ToLower())
                 | null -> builder "null"
                 | x -> builder (x)
@@ -344,7 +361,6 @@ type ODataFilterBuilder<'T>(oper: string) =
 
 
     member val Operator = oper
-
 
     member inline this.Run(ctx: FilterCombinator) = ODataFilterContext<'T>(this.Operator, ctx)
 
@@ -424,7 +440,16 @@ type ODataFilterBuilder<'T>(oper: string) =
         if isNull value then
             ctx
         else
-            FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append("contains(").Append(name).Append(", '").Append(value).Append("')"))
+            FilterCombinator(fun sb ->
+                ctx
+                    .Invoke(sb)
+                    .Append(this.Operator)
+                    .Append("contains(")
+                    .Append(name)
+                    .Append(", '")
+                    .Append(HttpUtility.UrlEncode value)
+                    .Append("')")
+            )
 
     [<CustomOperation("contains")>]
     member inline this.Contains([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: string) =
@@ -479,6 +504,7 @@ type OdataAndQuery<'T>() =
     inherit ODataAndFilterBuilder<'T>()
 
     member _.Run(ctx) = base.Run(ctx).ToQuery()
+
 
 /// Generate odata query context
 let odata<'T> = OData<'T>()

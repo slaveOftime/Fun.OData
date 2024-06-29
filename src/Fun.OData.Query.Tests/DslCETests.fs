@@ -214,10 +214,10 @@ let ``Test yield filter directly generation`` () =
     
     odataQuery<Contact> {
         filterAnd<{| Address: string option |}> {
-            eq (fun x -> x.Address) ""
+            eq (fun x -> x.Address) "#$^&12"
         }
     }
-    |> expectQuery "$select=Phone,Email&$filter=(Address eq '')"
+    |> expectQuery "$select=Phone,Email&$filter=(Address eq '%23%24%5e%2612')"
 
     odataQuery<Contact> {
         filterAnd<{| Address: string |}> {
@@ -302,11 +302,12 @@ let ``orderBy with multiple fields`` () =
 let ``eq and ne should work`` () =
     odataQuery<Contact> {
         filterAnd {
-            ne "Phone" "123"
-            ne (fun x -> x.Email) "456"
+            ne "Phone" "123#"
+            ne (fun x -> x.Email) "456#"
+            contains (fun x -> x.Email) "#"
         }
     }
-    |> expectQuery "$select=Phone,Email&$filter=(Phone ne '123' and Email ne '456')"
+    |> expectQuery "$select=Phone,Email&$filter=(Phone ne '123%23' and Email ne '456%23' and contains(Email, '%23'))"
   
     odataQuery<{| IsReadOnly: bool |}> {
         filterAnd<{| IsReadOnly: bool; Name: string |}> {
