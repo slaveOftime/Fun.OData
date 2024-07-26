@@ -69,23 +69,13 @@ module Internal =
                             else
                                 loopDeepth
                         expands[field.Name] <-
-                            (generateQuery
-                                field.PropertyType.GenericTypeArguments[0]
-                                ";"
-                                false
-                                loopDeepthMax
-                                nextLoopDeepth
-                                null
-                                null
-                                null
-                                List.Empty)
+                            (generateQuery field.PropertyType.GenericTypeArguments[0] ";" false loopDeepthMax nextLoopDeepth null null null List.Empty)
                                 .ToString()
                     else
                         match FSharpType.TryGetIEnumeralbleGenericType field.PropertyType with
                         | Some ty when field.PropertyType <> ty || loopDeepth <= loopDeepthMax ->
                             let nextLoopDeepth = if field.PropertyType = ty then loopDeepth + 1 else loopDeepth
-                            expands[field.Name] <-
-                                (generateQuery ty ";" false loopDeepthMax nextLoopDeepth null null null List.Empty).ToString()
+                            expands[field.Name] <- (generateQuery ty ";" false loopDeepthMax nextLoopDeepth null null null List.Empty).ToString()
                         | _ -> ()
 
         let filteredExpands =
@@ -234,6 +224,11 @@ type ODataQueryBuilder<'T>() =
         ctx.ExcludedFields.Add(getExpressionName prop)
         ctx
 
+    [<CustomOperation("excludeSelect")>]
+    member inline _.ExcludeSelect(ctx: ODataQueryContext<'T>, fields: string seq) =
+        ctx.ExcludedFields.AddRange(fields)
+        ctx
+
 
     [<CustomOperation("count")>]
     member inline _.Count(ctx: ODataQueryContext<'T>) =
@@ -270,12 +265,19 @@ type ODataQueryBuilder<'T>() =
     member inline _.OrderBy(ctx: ODataQueryContext<'T>, x: string) = ctx.SetOrderBy x
 
     [<CustomOperation("orderByDesc")>]
-    member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) =
-        ctx.SetOrderBy(getExpressionName prop + " desc")
+    member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) = ctx.SetOrderBy(getExpressionName prop + " desc")
 
     [<CustomOperation("orderByDesc")>]
     member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, x: string) = ctx.SetOrderBy(x + " desc")
 
+    [<CustomOperation("orderBy")>]
+    member inline _.OrderBy(ctx: ODataQueryContext<'T>, descendingWithFields: (bool * string) option) =
+        match descendingWithFields with
+        | Some(descending, fields) -> ctx.SetOrderBy(if descending then fields + " desc" else fields)
+        | _ -> ctx
+
+    member inline _.OrderBy(ctx: ODataQueryContext<'T>, (descending, fields): bool * string) =
+        ctx.SetOrderBy(if descending then fields + " desc" else fields)
 
     [<CustomOperation("expandPoco")>]
     member inline _.Expand(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) =
@@ -298,12 +300,7 @@ type ODataQueryBuilder<'T>() =
         ctx
 
     [<CustomOperation("expandList")>]
-    member inline _.ExpandList
-        (
-            ctx: ODataQueryContext<'T>,
-            prop: Expression<Func<'T, IEnumerable<'Prop>>>,
-            expandCtx: ODataQueryContext<'Prop>
-        ) =
+    member inline _.ExpandList(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, IEnumerable<'Prop>>>, expandCtx: ODataQueryContext<'Prop>) =
         ctx.Expand[getExpressionName prop] <- expandCtx.ToQuery(";")
         ctx
 
@@ -367,22 +364,35 @@ type ODataFilterBuilder<'T>(oper: string) =
 
     member inline _.Yield(_: unit) = emptyFilterCombinator
 
-    member inline this.Yield(x: string) = FilterCombinator(fun sb -> sb.Append(this.Operator).Append("(").Append(x).Append(")"))
+    member inline this.Yield(x: string) =
+        FilterCombinator(fun sb ->
+            if String.IsNullOrEmpty x then
+                sb
+            else
+                sb.Append(this.Operator).Append("(").Append(x).Append(")")
+        )
 
     member inline this.Yield(expressions: string seq) =
         FilterCombinator(fun sb ->
             for expression in expressions do
-                sb.Append(this.Operator).Append("(").Append(expression).Append(")") |> ignore
+                if String.IsNullOrEmpty expression |> not then
+                    sb.Append(this.Operator).Append("(").Append(expression).Append(")") |> ignore
             sb
         )
 
     member inline this.Yield(x: ODataFilterContext<'T>) =
-        FilterCombinator(fun sb -> sb.Append(this.Operator).Append("(").Append(x.ToQuery()).Append(")"))
+        FilterCombinator(fun sb ->
+            let query = x.ToQuery()
+            if String.IsNullOrEmpty query |> not then
+                sb.Append(this.Operator).Append("(").Append(query).Append(")")
+            else
+                sb
+        )
 
     member inline this.Yield(x: string option) =
         match x with
-        | None -> emptyFilterCombinator
-        | Some x -> FilterCombinator(fun sb -> sb.Append(this.Operator).Append("(").Append(x).Append(")"))
+        | Some x when not (String.IsNullOrEmpty x) -> FilterCombinator(fun sb -> sb.Append(this.Operator).Append("(").Append(x).Append(")"))
+        | _ -> emptyFilterCombinator
 
 
     member inline _.For(ctx: FilterCombinator, [<InlineIfLambda>] fn: unit -> FilterCombinator) =
@@ -477,6 +487,58 @@ type ODataFilterBuilder<'T>(oper: string) =
         | None -> ctx
         | Some x -> this.Contains(ctx, prop, x)
 
+    [<CustomOperation("startsWith")>]
+    member inline this.StartsWith([<InlineIfLambda>] ctx: FilterCombinator, name: string, value: string) =
+        if isNull value then
+            ctx
+        else
+            FilterCombinator(fun sb ->
+                ctx
+                    .Invoke(sb)
+                    .Append(this.Operator)
+                    .Append("startswith(")
+                    .Append(name)
+                    .Append(", '")
+                    .Append(HttpUtility.UrlEncode value)
+                    .Append("')")
+            )
+
+    [<CustomOperation("startsWith")>]
+    member inline this.StartsWith([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: string) =
+        this.StartsWith(ctx, getExpressionName prop, value)
+
+    [<CustomOperation("startsWith")>]
+    member inline this.StartsWith([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: string option) =
+        match value with
+        | None -> ctx
+        | Some x -> this.StartsWith(ctx, prop, x)
+
+    [<CustomOperation("endsWith")>]
+    member inline this.EndsWith([<InlineIfLambda>] ctx: FilterCombinator, name: string, value: string) =
+        if isNull value then
+            ctx
+        else
+            FilterCombinator(fun sb ->
+                ctx
+                    .Invoke(sb)
+                    .Append(this.Operator)
+                    .Append("endswith(")
+                    .Append(name)
+                    .Append(", '")
+                    .Append(HttpUtility.UrlEncode value)
+                    .Append("')")
+            )
+
+    [<CustomOperation("endsWith")>]
+    member inline this.EndsWith([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: string) =
+        this.EndsWith(ctx, getExpressionName prop, value)
+
+    [<CustomOperation("endsWith")>]
+    member inline this.EndsWith([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: string option) =
+        match value with
+        | None -> ctx
+        | Some x -> this.EndsWith(ctx, prop, x)
+
 
     [<CustomOperation("custom")>]
     member inline this.Custom([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, fn: string -> string) =
@@ -489,8 +551,9 @@ type ODataFilterBuilder<'T>(oper: string) =
     [<CustomOperation("custom")>]
     member inline this.Custom([<InlineIfLambda>] ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, fn: string -> string option) =
         match fn (getExpressionName prop) with
-        | None -> ctx
-        | Some x -> FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append("(").Append(x).Append(")"))
+        | Some x when not (String.IsNullOrEmpty x) ->
+            FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append("(").Append(x).Append(")"))
+        | _ -> ctx
 
 
 type ODataAndFilterBuilder<'T>() =

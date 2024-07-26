@@ -340,6 +340,29 @@ let ``yield list of string should work for filter`` () =
 
 
 [<Fact>]
+let ``empty filter should work`` () =
+    odataQuery<Contact> {
+        filterAnd {
+            [
+            ]
+            ""
+            Some ""
+            filterOr {
+                []
+                ""
+                Some ""
+            }
+            andQueries []
+            andQueries [""]
+            orQueries []
+            orQueries [""]
+        }
+    }
+    |> expectQuery "$select=Phone,Email"
+
+
+
+[<Fact>]
 let ``exclude should work`` () =
     odataQuery<Person> {
         excludeSelect (fun x -> x.Age)
@@ -353,3 +376,8 @@ let ``exclude should work`` () =
         excludeSelect (fun x -> x.Addresses)
     }
     |> expectQuery "$select=Name"
+
+    odataQuery<Person> {
+        excludeSelect ["Contact"; "Addresses"]
+    }
+    |> expectQuery "$select=Name,Age"
