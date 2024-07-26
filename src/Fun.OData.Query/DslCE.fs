@@ -425,6 +425,14 @@ type ODataFilterBuilder<'T>(oper: string) =
     [<CustomOperation("lt")>]
     member this.LT(ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: obj) = this.LT(ctx, getExpressionName prop, value)
 
+    [<CustomOperation("le")>]
+    member this.LE(ctx: FilterCombinator, name: string, value: obj) =
+        let builder (x: obj) = FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(name).Append(" le ").Append(x))
+        buildFilter ctx value builder
+
+    [<CustomOperation("le")>]
+    member this.LE(ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: obj) = this.LE(ctx, getExpressionName prop, value)
+
 
     [<CustomOperation("gt")>]
     member this.GT(ctx: FilterCombinator, name: string, value: obj) =
@@ -433,6 +441,14 @@ type ODataFilterBuilder<'T>(oper: string) =
 
     [<CustomOperation("gt")>]
     member this.GT(ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: obj) = this.GT(ctx, getExpressionName prop, value)
+
+    [<CustomOperation("ge")>]
+    member this.GE(ctx: FilterCombinator, name: string, value: obj) =
+        let builder (x: obj) = FilterCombinator(fun sb -> ctx.Invoke(sb).Append(this.Operator).Append(name).Append(" ge ").Append(x))
+        buildFilter ctx value builder
+
+    [<CustomOperation("ge")>]
+    member this.GE(ctx: FilterCombinator, prop: Expression<Func<'T, 'Prop>>, value: obj) = this.GE(ctx, getExpressionName prop, value)
 
 
     [<CustomOperation("contains")>]
