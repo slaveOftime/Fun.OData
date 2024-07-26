@@ -361,6 +361,22 @@ let ``empty filter should work`` () =
     |> expectQuery "$select=Phone,Email"
 
 
+[<Fact>]
+let ``filterNot should work`` () =
+    filterAndQuery {
+        filterNot {
+            filterAnd {
+                "demo"
+                filterNot {
+                    "lol"
+                }
+            }
+        }
+        eq "foo" 1
+    }
+    |> expectQuery "(not((demo) and (not(lol)))) and foo eq 1"
+
+
 
 [<Fact>]
 let ``exclude should work`` () =

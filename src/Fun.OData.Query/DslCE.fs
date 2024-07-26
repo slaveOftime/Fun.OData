@@ -331,7 +331,6 @@ type ODataQueryBuilder<'T>() =
         ctx
 
 
-
 type ODataFilterBuilder<'T>(oper: string) =
 
     let buildFilter (ctx: FilterCombinator) (value: obj) (builder: obj -> FilterCombinator) =
@@ -562,10 +561,41 @@ type ODataAndFilterBuilder<'T>() =
 type ODataOrFilterBuilder<'T>() =
     inherit ODataFilterBuilder<'T> " or "
 
+type ODataNotFilterBuilder<'T>() =
+
+    member inline _.Yield(_: unit) = emptyFilterCombinator
+
+    member inline _.Yield(x: string) =
+        FilterCombinator(fun sb ->
+            if String.IsNullOrEmpty x then
+                sb
+            else
+                sb.Append("not").Append("(").Append(x).Append(")")
+        )
+
+    member inline _.Yield(x: ODataFilterContext<'T>) =
+        FilterCombinator(fun sb ->
+            let query = x.ToQuery()
+            if String.IsNullOrEmpty query |> not then
+                sb.Append("not").Append("(").Append(query).Append(")")
+            else
+                sb
+        )
+
+    member inline _.Delay([<InlineIfLambda>] fn: unit -> FilterCombinator) = 
+        let ctx = FilterCombinator(fun sb -> fn().Invoke(sb))
+        ODataFilterContext<'T>(String.Empty, ctx)
+
+    member inline _.Combine([<InlineIfLambda>] x: FilterCombinator, [<InlineIfLambda>] y: FilterCombinator) =
+        FilterCombinator(fun sb -> y.Invoke(x.Invoke(sb)))
+
+    member inline _.Zero() = emptyFilterCombinator
+
 
 type OData<'T> = ODataQueryBuilder<'T>
 type ODataOr<'T> = ODataOrFilterBuilder<'T>
 type ODataAnd<'T> = ODataAndFilterBuilder<'T>
+type ODataNot<'T> = ODataNotFilterBuilder<'T>
 
 
 type OdataQuery<'T>() =
@@ -585,6 +615,10 @@ type OdataAndQuery<'T>() =
     member _.Run(ctx) = base.Run(ctx).ToQuery()
 
 
+type OdataNotQuery<'T>() =
+    inherit ODataNotFilterBuilder<'T>()
+
+
 /// Generate odata query context
 let odata<'T> = OData<'T>()
 /// Generate odata query string
@@ -599,6 +633,11 @@ let filterOrQuery<'T> = OdataOrQuery<'T>()
 let filterAnd<'T> = ODataAnd<'T>()
 /// Generate odata filter query string with and operator
 let filterAndQuery<'T> = OdataAndQuery<'T>()
+
+/// Generate odata filter context with not operator
+let filterNot<'T> = ODataNotFilterBuilder<'T>()
+/// Generate odata filter query string with not operator
+let filterNotQuery<'T> = OdataNotQuery<'T>()
 
 /// Create a OData query string for a type with default settings
 let odataDefault<'T> () = ODataQueryBuilder<'T>().Yield()
