@@ -399,12 +399,16 @@ let ``exclude should work`` () =
     |> expectQuery "$select=Name,Age"
 
 
-type Demo = { Foo: Foo }
+type Demo = { Foo: Foo; Foo1: Foo1 }
 and Foo() =
+    member val Name = "w" with get, set
+    member val Age = 18 with get, set
+and Foo1() =
+    interface IExpandable
     member val Name = "w" with get, set
     member val Age = 18 with get, set
 
 [<Fact>]
 let ``expandPopo for class type should work`` () =
-    odataQuery<Demo> { expandPoco (fun x -> x.Foo) } 
-    |> expectQuery "$select=Foo&$expand=Foo($select=Name,Age)"
+    odataQuery<Demo> { expandPoco (fun x -> x.Foo) (odata<Foo> { excludeSelect [] }) }
+    |> expectQuery "$select=Foo,Foo1&$expand=Foo($select=Name,Age),Foo1($select=Name,Age)"

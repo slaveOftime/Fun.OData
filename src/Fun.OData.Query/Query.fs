@@ -7,7 +7,8 @@ open Fun.OData.Query.Internal.Utils
 
 type FieldName = string
 
-
+type IExpandable = interface end
+ 
 type Query =
     | Select of string
     | SelectType of Type

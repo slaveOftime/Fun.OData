@@ -30,7 +30,7 @@ module Internal =
         (excludedFields: string list)
         =
         let sb = StringBuilder()
-        let fields = FSharpType.GetRecordFields(ty)
+        let fields = ty.GetProperties()
 
 
         sb.Append("$select=") |> ignore
@@ -76,6 +76,9 @@ module Internal =
                         | Some ty when field.PropertyType <> ty || loopDeepth <= loopDeepthMax ->
                             let nextLoopDeepth = if field.PropertyType = ty then loopDeepth + 1 else loopDeepth
                             expands[field.Name] <- (generateQuery ty ";" false loopDeepthMax nextLoopDeepth null null null List.Empty).ToString()
+                        | _ when field.PropertyType.GetInterfaces() |> Seq.exists ((=) typeof<IExpandable>) ->
+                            expands[field.Name] <-
+                                (generateQuery field.PropertyType ";" false loopDeepthMax (loopDeepth + 1) null null null List.Empty).ToString()
                         | _ -> ()
 
         let filteredExpands =
