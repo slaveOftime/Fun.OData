@@ -397,3 +397,14 @@ let ``exclude should work`` () =
         excludeSelect ["Contact"; "Addresses"]
     }
     |> expectQuery "$select=Name,Age"
+
+
+type Demo = { Foo: Foo }
+and Foo() =
+    member val Name = "w" with get, set
+    member val Age = 18 with get, set
+
+[<Fact>]
+let ``expandPopo for class type should work`` () =
+    odataQuery<Demo> { expandPoco (fun x -> x.Foo) } 
+    |> expectQuery "$select=Foo&$expand=Foo($select=Name,Age)"

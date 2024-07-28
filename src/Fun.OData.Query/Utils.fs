@@ -33,16 +33,12 @@ let rec getExpressionName (exp: Expression) =
 
 
 let generateSelectQueryByType lowerFirstCase sourceType =
-    let ty =
-        if FSharpType.IsRecord sourceType then
-            sourceType
-        elif FSharpType.IsRecordOption sourceType then
-            sourceType.GenericTypeArguments.[0]
-        else
-            failwith "Only support fsharp record"
-
-    FSharpType.GetRecordFields ty
-    |> Seq.map (fun x -> x.Name)
+    if FSharpType.IsRecord sourceType then
+        FSharpType.GetRecordFields sourceType |> Seq.map (fun x -> x.Name)
+    elif FSharpType.IsRecordOption sourceType then
+        FSharpType.GetRecordFields sourceType.GenericTypeArguments.[0] |> Seq.map (fun x -> x.Name)
+    else
+        sourceType.GetProperties() |> Seq.map (fun x -> x.Name)
     |> Seq.map (fun x ->
         if lowerFirstCase then
             if String.IsNullOrEmpty x then x

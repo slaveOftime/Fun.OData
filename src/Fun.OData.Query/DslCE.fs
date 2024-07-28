@@ -582,7 +582,7 @@ type ODataNotFilterBuilder<'T>() =
                 sb
         )
 
-    member inline _.Delay([<InlineIfLambda>] fn: unit -> FilterCombinator) = 
+    member inline _.Delay([<InlineIfLambda>] fn: unit -> FilterCombinator) =
         let ctx = FilterCombinator(fun sb -> fn().Invoke(sb))
         ODataFilterContext<'T>(String.Empty, ctx)
 
