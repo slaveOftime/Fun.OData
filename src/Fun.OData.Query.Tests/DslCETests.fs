@@ -399,7 +399,21 @@ let ``exclude should work`` () =
     |> expectQuery "$select=Name,Age"
 
 
-type Demo = { Foo: Foo; Foo1: Foo1 }
+
+type Site =
+    {
+        Nr: int
+        Name: string
+    }
+    static member DefaultValue = { Nr = 0; Name = "" }
+    static member Demo1 = "1"
+and AppUserRole = {
+    UserRoleId: int
+    EzdSiteUserRoleLinks: SiteUserRoleLink list
+}
+and SiteUserRoleLink = { SiteNrNavigation: Site }
+
+type Demo = { Foo: Foo; Foo1: Foo1; AppUserRole: AppUserRole }
 and Foo() =
     member val Name = "w" with get, set
     member val Age = 18 with get, set
@@ -411,4 +425,4 @@ and Foo1() =
 [<Fact>]
 let ``expandPopo for class type should work`` () =
     odataQuery<Demo> { expandPoco (fun x -> x.Foo) (odata<Foo> { excludeSelect [] }) }
-    |> expectQuery "$select=Foo,Foo1&$expand=Foo($select=Name,Age),Foo1($select=Name,Age)"
+    |> expectQuery "$select=Foo,Foo1,AppUserRole&$expand=Foo($select=Name,Age),Foo1($select=Name,Age),AppUserRole($select=UserRoleId,EzdSiteUserRoleLinks;$expand=EzdSiteUserRoleLinks($select=SiteNrNavigation;$expand=SiteNrNavigation($select=Nr,Name)))"

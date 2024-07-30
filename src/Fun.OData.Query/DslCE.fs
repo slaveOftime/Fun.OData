@@ -6,6 +6,7 @@ open System.Web
 open System.Text
 open System.Linq.Expressions
 open System.Collections.Generic
+open System.Diagnostics
 open Microsoft.FSharp.Reflection
 open Fun.OData.Query.Internal
 
@@ -30,7 +31,9 @@ module Internal =
         (excludedFields: string list)
         =
         let sb = StringBuilder()
-        let fields = ty.GetProperties()
+        let fields = 
+            if FSharpType.IsRecord ty then FSharpType.GetRecordFields ty
+            else ty.GetProperties()
 
 
         sb.Append("$select=") |> ignore
@@ -56,9 +59,11 @@ module Internal =
             for field in fields do
                 if expands.ContainsKey field.Name |> not && not (excludedFields |> List.contains field.Name) then
                     if FSharpType.IsRecord field.PropertyType then
-                        if field.PropertyType = ty then failwith "Recursive record is not supported"
-                        expands[field.Name] <-
-                            (generateQuery field.PropertyType ";" false loopDeepthMax loopDeepth null null null List.Empty).ToString()
+                        if field.PropertyType = ty then
+                            Debug.Write $"Recursive record is not supported: from type {ty.Name} to property {field.PropertyType.Name}"
+                        else
+                            expands[field.Name] <-
+                                (generateQuery field.PropertyType ";" false loopDeepthMax loopDeepth null null null List.Empty).ToString()
                     elif
                         FSharpType.IsRecordOption field.PropertyType
                         && (field.PropertyType.GenericTypeArguments[0] <> ty || loopDeepth <= loopDeepthMax)
