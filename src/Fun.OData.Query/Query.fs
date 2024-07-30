@@ -7,8 +7,10 @@ open Fun.OData.Query.Internal.Utils
 
 type FieldName = string
 
-type IExpandable = interface end
- 
+type IExpandable =
+    interface
+    end
+
 type Query =
     | Select of string
     | SelectType of Type
@@ -29,13 +31,13 @@ module Query =
     let inline generateSelectQuery<'T> () = generateSelectQueryByType false typeof<'T>
 
 
-    let rec combineQuery spliter qs =
+    let rec combineQuery spliter (qs: Query seq) =
         let safeAdd key map x state = if String.IsNullOrEmpty x then state else state |> Map.add key (map x)
 
         let maps =
             qs
-            |> List.distinct
-            |> List.fold
+            |> Seq.distinct
+            |> Seq.fold
                 (fun s q ->
                     match q with
                     | Id _ -> s
@@ -62,7 +64,7 @@ module Query =
                 )
                 Map.empty
 
-        [
+        [|
             yield! maps |> Map.filter (fun k _ -> k.StartsWith "Filter-" |> not) |> Map.toSeq |> Seq.map snd
 
             maps
@@ -73,14 +75,14 @@ module Query =
             |> function
                 | "" -> ""
                 | x -> sprintf "$filter=%s" x
-        ]
+        |]
         |> Seq.filter (String.IsNullOrWhiteSpace >> not)
         |> String.concat spliter
 
 
-    let generate quries =
+    let generate (quries: Query seq) =
         quries
-        |> List.tryPick (
+        |> Seq.tryPick (
             function
             | Id x -> Some("(" + string x + ")")
             | _ -> None
@@ -96,9 +98,11 @@ module Query =
             |> Array.choose (fun x ->
                 if FSharpType.IsRecord x.PropertyType then
                     Some(x.Name, x.PropertyType)
-                elif FSharpType.IsRecordArray x.PropertyType
-                     || FSharpType.IsRecordList x.PropertyType
-                     || FSharpType.IsRecordOption x.PropertyType then
+                elif
+                    FSharpType.IsRecordArray x.PropertyType
+                    || FSharpType.IsRecordList x.PropertyType
+                    || FSharpType.IsRecordOption x.PropertyType
+                then
                     Some(x.Name, x.PropertyType.GenericTypeArguments.[0])
                 else
                     None
@@ -121,11 +125,11 @@ module Query =
                 | [] -> None
                 | x -> Some(ExpandEx x)
 
-        [
+        [|
             generateSelectQuery<'T> () |> Select
             match loop typeof<'T> with
             | Some x -> x
             | None -> ()
-        ]
-        @ quries
+            yield! quries
+        |]
         |> generate
