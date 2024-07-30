@@ -31,9 +31,11 @@ module Internal =
         (excludedFields: string list)
         =
         let sb = StringBuilder()
-        let fields = 
-            if FSharpType.IsRecord ty then FSharpType.GetRecordFields ty
-            else ty.GetProperties()
+        let fields =
+            if FSharpType.IsRecord ty then
+                FSharpType.GetRecordFields ty
+            else
+                ty.GetProperties()
 
 
         sb.Append("$select=") |> ignore
@@ -310,6 +312,16 @@ type ODataQueryBuilder<'T>() =
     [<CustomOperation("expandList")>]
     member inline _.ExpandList(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, IEnumerable<'Prop>>>, expandCtx: ODataQueryContext<'Prop>) =
         ctx.Expand[getExpressionName prop] <- expandCtx.ToQuery(";")
+        ctx
+
+    [<CustomOperation("expand")>]
+    member inline _.Expand<'Prop>(ctx: ODataQueryContext<'T>, prop: string, expandCtx: ODataQueryContext<'Prop>) =
+        ctx.Expand[prop] <- expandCtx.ToQuery(";")
+        ctx
+
+    [<CustomOperation("expand")>]
+    member inline _.Expand<'Prop>(ctx: ODataQueryContext<'T>, prop: string, queries: Query seq) =
+        ctx.Expand[prop] <- Query.generate(queries).Substring(1)
         ctx
 
 

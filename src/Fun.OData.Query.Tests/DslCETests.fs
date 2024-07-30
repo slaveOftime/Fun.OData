@@ -426,3 +426,14 @@ and Foo1() =
 let ``expandPopo for class type should work`` () =
     odataQuery<Demo> { expandPoco (fun x -> x.Foo) (odata<Foo> { excludeSelect [] }) }
     |> expectQuery "$select=Foo,Foo1,AppUserRole&$expand=Foo($select=Name,Age),Foo1($select=Name,Age),AppUserRole($select=UserRoleId,EzdSiteUserRoleLinks;$expand=EzdSiteUserRoleLinks($select=SiteNrNavigation;$expand=SiteNrNavigation($select=Nr,Name)))"
+
+[<Fact>]
+let ``expand should work`` () =
+    odataQuery<Contact> { expand "Demo" (odata<Foo> { empty }) }
+    |> expectQuery "$select=Phone,Email&$expand=Demo($select=Name,Age)"
+
+    odataQuery<Contact> { expand "Demo" [| Select "Name,Age" |] }
+    |> expectQuery "$select=Phone,Email&$expand=Demo($select=Name,Age)"
+    
+    odataQuery<Contact> { expand "Demo" [| |] }
+    |> expectQuery "$select=Phone,Email&$expand=Demo"
