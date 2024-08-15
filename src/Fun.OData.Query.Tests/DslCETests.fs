@@ -437,3 +437,20 @@ let ``expand should work`` () =
     
     odataQuery<Contact> { expand "Demo" [| |] }
     |> expectQuery "$select=Phone,Email&$expand=Demo"
+
+
+
+[<Fact>]
+let ``compute should work`` () =
+    odataQuery<{| Demo2: int |}> { compute "demo as Demo2" }
+    |> expectQuery "$select=Demo2&$compute=demo as Demo2"
+
+    odataQuery<{| Demo2: int |}> { compute None }
+    |> expectQuery "$select=Demo2"
+    
+    [
+        Select "Demo1"
+        Compute "demo as Demo1"
+    ]
+    |> Query.generate
+    |> expectQuery "?$compute=demo as Demo1&$select=Demo1"

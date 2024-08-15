@@ -268,6 +268,18 @@ type ODataQueryBuilder<'T>() =
         | Some num -> this.Skip(ctx, num)
 
 
+    [<CustomOperation("compute")>]
+    member inline _.Compute(ctx: ODataQueryContext<'T>, str: string) =
+        if not (String.IsNullOrEmpty str) then ctx.SimpleQuries["$compute"] <- str
+        ctx
+
+    [<CustomOperation("compute")>]
+    member inline this.Compute(ctx: ODataQueryContext<'T>, str: string option) =
+        match str with
+        | None -> ctx
+        | Some str -> this.Compute(ctx, str)
+
+
     [<CustomOperation("orderBy")>]
     member inline _.OrderBy(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) = ctx.SetOrderBy(getExpressionName prop)
 
@@ -349,6 +361,12 @@ type ODataQueryBuilder<'T>() =
     member inline _.KeyValue(ctx: ODataQueryContext<'T>, key: string, value: string) =
         ctx.SimpleQuries[key] <- value
         ctx
+
+    [<CustomOperation("keyValue")>]
+    member inline this.KeyValue(ctx: ODataQueryContext<'T>, key: string, value: string option) =
+        match value with
+        | None -> ctx
+        | Some x -> this.KeyValue(ctx, key, x)
 
 
 type ODataFilterBuilder<'T>(oper: string) =

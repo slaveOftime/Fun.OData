@@ -24,6 +24,7 @@ type Query =
     | ExpandEx of (FieldName * Query list) list
     | External of string
     | Id of string
+    | Compute of string
 
 
 module Query =
@@ -50,6 +51,7 @@ module Query =
                     | Filter x -> s |> safeAdd (sprintf "Filter-%d" s.Count) (sprintf "%s") x
                     | Take x -> s |> safeAdd "Take" (sprintf "$top=%s") (string x)
                     | Skip x -> s |> safeAdd "Skip" (sprintf "$skip=%s") (string x)
+                    | Compute x -> s |> safeAdd "Compute" (sprintf "$compute=%s") (string x)
                     | Expand x -> s |> safeAdd "Expand" (sprintf "$expand=%s") x
                     | ExpandEx ls ->
                         s
