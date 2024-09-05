@@ -430,13 +430,13 @@ let ``expandPopo for class type should work`` () =
 [<Fact>]
 let ``expand should work`` () =
     odataQuery<Contact> { expand "Demo" (odata<Foo> { empty }) }
-    |> expectQuery "$select=Phone,Email&$expand=Demo($select=Name,Age)"
+    |> expectQuery "$select=Phone,Email,Demo&$expand=Demo($select=Name,Age)"
 
     odataQuery<Contact> { expand "Demo" [| Select "Name,Age" |] }
-    |> expectQuery "$select=Phone,Email&$expand=Demo($select=Name,Age)"
+    |> expectQuery "$select=Phone,Email,Demo&$expand=Demo($select=Name,Age)"
     
     odataQuery<Contact> { expand "Demo" [| |] }
-    |> expectQuery "$select=Phone,Email&$expand=Demo"
+    |> expectQuery "$select=Phone,Email,Demo&$expand=Demo"
 
 
 
@@ -454,3 +454,113 @@ let ``compute should work`` () =
     ]
     |> Query.generate
     |> expectQuery "?$compute=demo as Demo1&$select=Demo1"
+
+
+[<Fact>]
+let ``flatted exclude should work`` () =
+    odataQuery<Person> { 
+        excludeSelect [|
+            "Age"
+            "Contact.Phone"
+            "Addresses.Street"
+            "Addresses.Room"
+        |]
+    }
+    |> expectQuery "$select=Name,Contact&$expand=Contact($select=Email)"
+    
+    odataQuery<Person> { 
+        excludeSelect [|
+            "Age"
+            "Contact.Phone"
+            "Addresses.Street"
+            "Addresses.Room"
+        |]
+        expandList (fun x -> x.Addresses) (odata {
+            excludeSelect [|
+                "Street"
+                "Room"
+            |]
+        })
+    }
+    |> expectQuery "$select=Name,Contact&$expand=Contact($select=Email)"
+    
+    odataQuery<Person> { 
+        excludeSelect [|
+            "Age"
+            "Contact.Phone"
+        |]
+        expand "Addresses" (odata<Address> {
+            excludeSelect [|
+                "Room"
+            |]
+        })
+    }
+    |> expectQuery "$select=Name,Contact,Addresses&$expand=Addresses($select=Street),Contact($select=Email)"
+
+    odataQuery<Person> { 
+        excludeSelect [|
+            "Age"
+            "Addresses.Room"
+            "Contact.Phone"
+        |]
+        expand "Addresses" (odata<Address> {
+            empty
+        })
+    }
+    |> expectQuery "$select=Name,Contact,Addresses&$expand=Addresses($select=Street),Contact($select=Email)"
+
+    odataQuery<{| Level: {| Level1: {| Level2: {| Name: string |} |} |} |}> { 
+        excludeSelect [|
+            "Level.Level1.Level2.Name"
+        |]
+    }
+    |> expectQuery ""
+
+    odataQuery<{| Level: {| Level1: {| Level2: {| Name: string; Age: int |} |} |} |}> { 
+        excludeSelect [|
+            "Level.Level1.Level2.Name"
+        |]
+    }
+    |> expectQuery "$select=Level&$expand=Level($select=Level1;$expand=Level1($select=Level2;$expand=Level2($select=Age)))"
+
+
+[<Fact>]
+let ``select should work`` () =
+    odataQuery<Person> { 
+        select [| "Age"; "Name" |]
+        excludeSelect [|
+            "Age"
+            "Contact.Phone"
+            "Addresses.Street"
+            "Addresses.Room"
+        |]
+    }
+    |> expectQuery "$select=Name"
+
+    odataQuery<Person> { 
+        excludeSelect [|
+            "Age"
+            "Contact.Phone"
+            "Contact.Email"
+            "Addresses.Room"
+        |]
+        expand (fun x -> x.Addresses) (odata {
+            select [| "Street"; "Room" |]
+        })
+        expand (fun x -> x.Contact) (odata {
+            select [| "Phone"; "Email" |]
+        })
+    }
+    |> expectQuery "$select=Name,Addresses&$expand=Addresses($select=Street)"
+
+    odataQuery<Person> { 
+        excludeSelect [|
+            "Age"
+            "Contact"
+            "Addresses"
+        |]
+        expand (fun x -> x.Contact) (odata {
+            select [| "Phone"; "Email" |]
+        })
+    }
+    |> expectQuery "$select=Name"

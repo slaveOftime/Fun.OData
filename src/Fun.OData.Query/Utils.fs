@@ -31,14 +31,17 @@ let rec getExpressionName (exp: Expression) =
     | ExpressionType.Convert -> getExpressionName (exp :?> UnaryExpression).Operand
     | _ -> failwith "Unsupported expression"
 
-
-let generateSelectQueryByType lowerFirstCase sourceType =
+let getPropertiesForType sourceType =
     if FSharpType.IsRecord sourceType then
         FSharpType.GetRecordFields sourceType |> Seq.map (fun x -> x.Name)
     elif FSharpType.IsRecordOption sourceType then
         FSharpType.GetRecordFields sourceType.GenericTypeArguments.[0] |> Seq.map (fun x -> x.Name)
     else
         sourceType.GetProperties() |> Seq.map (fun x -> x.Name)
+    |> Seq.toList
+
+let generateSelectQueryByPropertyNames lowerFirstCase names =
+    names
     |> Seq.map (fun x ->
         if lowerFirstCase then
             if String.IsNullOrEmpty x then x
@@ -48,3 +51,6 @@ let generateSelectQueryByType lowerFirstCase sourceType =
             x
     )
     |> fun x -> String.Join(",", x)
+
+let generateSelectQueryByType lowerFirstCase sourceType =
+    getPropertiesForType sourceType |> generateSelectQueryByPropertyNames lowerFirstCase

@@ -18,6 +18,18 @@ module Internal =
 
     let emptyFilterCombinator = FilterCombinator(fun x -> x)
 
+    [<Literal>]
+    let EmptyQuery = "<EMPTY>"
+
+    let getNestedExcludes (name) (excludedFields: string seq) =
+        excludedFields
+        |> Seq.choose (fun x ->
+            if x.StartsWith name && x.Length > name.Length + 1 then
+                x.Substring(name.Length + 1) |> Some
+            else
+                None
+        )
+        |> Seq.toList
 
     let rec generateQuery
         (ty: Type)
@@ -28,33 +40,23 @@ module Internal =
         (simpleQuries: Dictionary<string, string>)
         (expands: Dictionary<string, string>)
         (filter: List<string>)
+        (selectFields: string list)
         (excludedFields: string list)
         =
-        let sb = StringBuilder()
+
         let fields =
-            if FSharpType.IsRecord ty then
-                FSharpType.GetRecordFields ty
+            if selectFields.Length > 0 then
+                List.empty
             else
-                ty.GetProperties()
+                if FSharpType.IsRecord ty then
+                    FSharpType.GetRecordFields ty
+                else
+                    ty.GetProperties()
+                |> Seq.toList
 
-
-        sb.Append("$select=") |> ignore
-
-        let mutable i = 0
-        for field in fields do
-            if excludedFields |> List.contains field.Name |> not then
-                if i > 0 then sb.Append(",") |> ignore
-                sb.Append(field.Name) |> ignore
-                i <- i + 1
-
-
-        if simpleQuries <> null && simpleQuries.Count > 0 then
-            for KeyValue(k, v) in simpleQuries do
-                sb.Append(combinator).Append(k).Append("=").Append(v) |> ignore
-
+        let getNestedExcludes x = getNestedExcludes x excludedFields
 
         let mutable expands = expands
-
         if not disableAutoExpand then
             if expands = null then expands <- Dictionary<string, string>()
 
@@ -65,7 +67,18 @@ module Internal =
                             Debug.Write $"Recursive record is not supported: from type {ty.Name} to property {field.PropertyType.Name}"
                         else
                             expands[field.Name] <-
-                                (generateQuery field.PropertyType ";" false loopDeepthMax loopDeepth null null null List.Empty).ToString()
+                                (generateQuery
+                                    field.PropertyType
+                                    ";"
+                                    false
+                                    loopDeepthMax
+                                    loopDeepth
+                                    null
+                                    null
+                                    null
+                                    List.empty
+                                    (getNestedExcludes field.Name))
+                                    .ToString()
                     elif
                         FSharpType.IsRecordOption field.PropertyType
                         && (field.PropertyType.GenericTypeArguments[0] <> ty || loopDeepth <= loopDeepthMax)
@@ -76,47 +89,116 @@ module Internal =
                             else
                                 loopDeepth
                         expands[field.Name] <-
-                            (generateQuery field.PropertyType.GenericTypeArguments[0] ";" false loopDeepthMax nextLoopDeepth null null null List.Empty)
+                            (generateQuery
+                                field.PropertyType.GenericTypeArguments[0]
+                                ";"
+                                false
+                                loopDeepthMax
+                                nextLoopDeepth
+                                null
+                                null
+                                null
+                                List.empty
+                                (getNestedExcludes field.Name))
                                 .ToString()
                     else
                         match FSharpType.TryGetIEnumeralbleGenericType field.PropertyType with
                         | Some ty when field.PropertyType <> ty || loopDeepth <= loopDeepthMax ->
                             let nextLoopDeepth = if field.PropertyType = ty then loopDeepth + 1 else loopDeepth
-                            expands[field.Name] <- (generateQuery ty ";" false loopDeepthMax nextLoopDeepth null null null List.Empty).ToString()
+                            expands[field.Name] <-
+                                (generateQuery
+                                    ty
+                                    ";"
+                                    false
+                                    loopDeepthMax
+                                    nextLoopDeepth
+                                    null
+                                    null
+                                    null
+                                    List.empty
+                                    (getNestedExcludes field.Name))
+                                    .ToString()
                         | _ when field.PropertyType.GetInterfaces() |> Seq.exists ((=) typeof<IExpandable>) ->
                             expands[field.Name] <-
-                                (generateQuery field.PropertyType ";" false loopDeepthMax (loopDeepth + 1) null null null List.Empty).ToString()
+                                (generateQuery
+                                    field.PropertyType
+                                    ";"
+                                    false
+                                    loopDeepthMax
+                                    (loopDeepth + 1)
+                                    null
+                                    null
+                                    null
+                                    List.empty
+                                    (getNestedExcludes field.Name))
+                                    .ToString()
                         | _ -> ()
 
-        let filteredExpands =
-            if expands = null then
-                []
-            else
-                expands |> Seq.filter (fun (KeyValue(k, _)) -> excludedFields |> List.contains k |> not) |> Seq.toList
 
-        if filteredExpands.Length > 0 then
-            let mutable i = 0
-            sb.Append(combinator).Append("$expand=") |> ignore
-            for KeyValue(k, v) in filteredExpands do
-                if i > 0 then sb.Append(",") |> ignore
-                if String.IsNullOrEmpty v |> not then
-                    sb.Append(k).Append("(").Append(v).Append(")") |> ignore
+        if excludedFields |> Seq.filter (fun x -> x.Contains "." |> not) |> Seq.length = fields.Length then
+            EmptyQuery
+
+        else
+            let filteredExpands =
+                if expands = null then
+                    []
                 else
-                    sb.Append(k) |> ignore
-                i <- i + 1
+                    expands |> Seq.filter (fun (KeyValue(k, _)) -> excludedFields |> List.contains k |> not) |> Seq.toList
 
+            let isDirectExcluded name = excludedFields |> Seq.contains name
+            let isNestedExcluded name = filteredExpands |> Seq.exists (fun x -> x.Key = name && x.Value = EmptyQuery)
 
-        if filter <> null && filter.Count > 0 then
-            let mutable i = 0
-            for filterStr in filter do
-                if i > 0 then sb.Append(" and ") |> ignore
-                if String.IsNullOrEmpty filterStr |> not then
-                    if i = 0 then sb.Append(combinator).Append("$filter=") |> ignore
-                    sb.Append("(").Append(filterStr).Append(")") |> ignore
-                    i <- i + 1
+            let selectFields =
+                [|
+                    yield! selectFields
+                    yield! fields |> Seq.map (fun x -> x.Name)
+                    yield! filteredExpands |> Seq.map (fun x -> x.Key)
+                |]
+                |> Seq.distinct
+                |> Seq.filter (fun x -> not (isDirectExcluded x) && not (isNestedExcluded x))
+                |> Seq.toList
 
+            let sb = StringBuilder()
 
-        sb.ToString()
+            if selectFields.Length > 0 then
+                sb.Append("$select=") |> ignore
+                let mutable isFirstAppend = true
+                for field in selectFields do
+                    if not isFirstAppend then sb.Append(",") |> ignore
+                    sb.Append(field) |> ignore
+                    isFirstAppend <- false
+
+                if simpleQuries <> null && simpleQuries.Count > 0 then
+                    for KeyValue(k, v) in simpleQuries do
+                        sb.Append(combinator).Append(k).Append("=").Append(v) |> ignore
+
+                if filteredExpands.Length > 0 then
+                    let mutable isFirstAppend = true
+                    sb.Append(combinator).Append("$expand=") |> ignore
+                    for KeyValue(k, v) in filteredExpands do
+                        if String.IsNullOrEmpty v |> not then
+                            if v <> EmptyQuery then
+                                if not isFirstAppend then sb.Append(",") |> ignore
+                                sb.Append(k).Append("(").Append(v).Append(")") |> ignore
+                                isFirstAppend <- false
+                        else
+                            if not isFirstAppend then sb.Append(",") |> ignore
+                            sb.Append(k) |> ignore
+                            isFirstAppend <- false
+
+                if filter <> null && filter.Count > 0 then
+                    let mutable i = 0
+                    for filterStr in filter do
+                        if i > 0 then sb.Append(" and ") |> ignore
+                        if String.IsNullOrEmpty filterStr |> not then
+                            if i = 0 then sb.Append(combinator).Append("$filter=") |> ignore
+                            sb.Append("(").Append(filterStr).Append(")") |> ignore
+                            i <- i + 1
+
+                sb.ToString()
+
+            else
+                EmptyQuery
 
 
 type ODataQueryContext<'T>() =
@@ -124,21 +206,33 @@ type ODataQueryContext<'T>() =
     member val SimpleQuries = Dictionary<string, string>()
     member val Expand = Dictionary<string, string>()
     member val Filter = List<string>()
-    member val ExcludedFields = List<string>()
+    member val SelectFields = HashSet<string>()
+    member val ExcludedFields = HashSet<string>()
     member val DisableAutoExpand = false with get, set
     member val MaxLoopDeepth = 1 with get, set
 
-    member ctx.ToQuery(?combinator) =
-        generateQuery
-            typeof<'T>
-            (defaultArg combinator "&")
-            ctx.DisableAutoExpand
-            ctx.MaxLoopDeepth
-            0
-            ctx.SimpleQuries
-            ctx.Expand
-            ctx.Filter
-            (ctx.ExcludedFields |> Seq.toList)
+    member ctx.GetNestedExcludes(name) = Internal.getNestedExcludes name ctx.ExcludedFields
+
+    member ctx.GetNestedDirectExcludes(name) =
+        Internal.getNestedExcludes name ctx.ExcludedFields |> List.filter (fun x -> x.Contains "." |> not)
+
+    member ctx.ToQuery(?combinator, ?finalize) =
+        let finalize = defaultArg finalize true
+
+        let query =
+            generateQuery
+                typeof<'T>
+                (defaultArg combinator "&")
+                ctx.DisableAutoExpand
+                ctx.MaxLoopDeepth
+                0
+                ctx.SimpleQuries
+                ctx.Expand
+                ctx.Filter
+                (ctx.SelectFields |> Seq.toList)
+                (ctx.ExcludedFields |> Seq.toList)
+
+        if query = EmptyQuery && finalize then String.Empty else query
 
     member ctx.MergeInto(target: ODataQueryContext<'T>) =
         for KeyValue(k, v) in ctx.SimpleQuries do
@@ -147,7 +241,8 @@ type ODataQueryContext<'T>() =
             target.Expand[k] <- v
         target.Filter.AddRange ctx.Filter
         target.DisableAutoExpand <- ctx.DisableAutoExpand
-        target.ExcludedFields.AddRange ctx.ExcludedFields
+        for field in ctx.ExcludedFields do
+            target.ExcludedFields.Add field |> ignore
 
         target
 
@@ -156,6 +251,22 @@ type ODataQueryContext<'T>() =
         match ctx.SimpleQuries.TryGetValue key with
         | true, str -> ctx.SimpleQuries[key] <- str + "," + value
         | _ -> ctx.SimpleQuries.Add(key, value)
+        ctx
+
+
+    member ctx.AddExpand<'Prop>(name: string) =
+        let excluded = ctx.GetNestedDirectExcludes name
+        let properties = getPropertiesForType typeof<'Prop>
+        if properties.Length > excluded.Length then
+            ctx.Expand[name] <- sprintf "$select=%s" (properties |> Seq.except excluded |> generateSelectQueryByPropertyNames false)
+        ctx
+
+    member ctx.AddExpand<'Prop>(name: string, expandCtx: ODataQueryContext<'Prop>) =
+        let excluded = ctx.GetNestedExcludes name
+        for property in excluded do
+            if expandCtx.ExcludedFields.Contains(property) |> not then
+                expandCtx.ExcludedFields.Add(property) |> ignore
+        ctx.Expand[name] <- expandCtx.ToQuery(";", finalize = false)
         ctx
 
 
@@ -228,15 +339,32 @@ type ODataQueryBuilder<'T>() =
         ctx.MaxLoopDeepth <- if max > 0 then max else 0
         ctx
 
+
+    // Override default select by type, auto expand will be ignored
+    [<CustomOperation("select")>]
+    member inline _.Select(ctx: ODataQueryContext<'T>, ty: Type) =
+        for property in getPropertiesForType ty do
+            ctx.SelectFields.Add(property) |> ignore
+        ctx
+
+    // Override default select by type, auto expand will be ignored
+    [<CustomOperation("select")>]
+    member inline _.Select(ctx: ODataQueryContext<'T>, fields: string seq) =
+        for field in fields do
+            ctx.SelectFields.Add(field) |> ignore
+        ctx
+
+
     /// With this we can support use case like backward compatibility of database changes
     [<CustomOperation("excludeSelect")>]
     member inline _.ExcludeSelect(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) =
-        ctx.ExcludedFields.Add(getExpressionName prop)
+        ctx.ExcludedFields.Add(getExpressionName prop) |> ignore
         ctx
 
     [<CustomOperation("excludeSelect")>]
     member inline _.ExcludeSelect(ctx: ODataQueryContext<'T>, fields: string seq) =
-        ctx.ExcludedFields.AddRange(fields)
+        for field in fields do
+            ctx.ExcludedFields.Add(field) |> ignore
         ctx
 
 
@@ -287,7 +415,8 @@ type ODataQueryBuilder<'T>() =
     member inline _.OrderBy(ctx: ODataQueryContext<'T>, x: string) = ctx.SetOrderBy x
 
     [<CustomOperation("orderByDesc")>]
-    member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) = ctx.SetOrderBy(getExpressionName prop + " desc")
+    member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) =
+        ctx.SetOrderBy(getExpressionName prop + " desc")
 
     [<CustomOperation("orderByDesc")>]
     member inline _.OrderByDesc(ctx: ODataQueryContext<'T>, x: string) = ctx.SetOrderBy(x + " desc")
@@ -301,35 +430,34 @@ type ODataQueryBuilder<'T>() =
     member inline _.OrderBy(ctx: ODataQueryContext<'T>, (descending, fields): bool * string) =
         ctx.SetOrderBy(if descending then fields + " desc" else fields)
 
+
     [<CustomOperation("expandPoco")>]
-    member inline _.Expand(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) =
-        ctx.Expand[getExpressionName prop] <- sprintf "$select=%s" (generateSelectQueryByType false typeof<'Prop>)
-        ctx
+    member inline _.Expand(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>) = ctx.AddExpand<'Prop>(getExpressionName prop)
 
     [<CustomOperation("expandPoco")>]
     member inline _.Expand(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop>>, expandCtx: ODataQueryContext<'Prop>) =
-        ctx.Expand[getExpressionName prop] <- expandCtx.ToQuery(";")
-        ctx
+        ctx.AddExpand(getExpressionName prop, expandCtx)
 
     [<CustomOperation("expandPoco")>]
     member inline _.Expand(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, 'Prop option>>, expandCtx: ODataQueryContext<'Prop>) =
-        ctx.Expand[getExpressionName prop] <- expandCtx.ToQuery(";")
-        ctx
+        ctx.AddExpand(getExpressionName prop, expandCtx)
 
     [<CustomOperation("expandList")>]
     member inline _.ExpandList(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, IEnumerable<'Prop>>>) =
-        ctx.Expand[getExpressionName prop] <- sprintf "$select=%s" (generateSelectQueryByType false typeof<'Prop>)
-        ctx
+        ctx.AddExpand<'Prop>(getExpressionName prop)
 
     [<CustomOperation("expandList")>]
-    member inline _.ExpandList(ctx: ODataQueryContext<'T>, prop: Expression<Func<'T, IEnumerable<'Prop>>>, expandCtx: ODataQueryContext<'Prop>) =
-        ctx.Expand[getExpressionName prop] <- expandCtx.ToQuery(";")
-        ctx
+    member inline _.ExpandList
+        (
+            ctx: ODataQueryContext<'T>,
+            prop: Expression<Func<'T, IEnumerable<'Prop>>>,
+            expandCtx: ODataQueryContext<'Prop>
+        ) =
+        ctx.AddExpand<'Prop>(getExpressionName prop, expandCtx)
 
     [<CustomOperation("expand")>]
     member inline _.Expand<'Prop>(ctx: ODataQueryContext<'T>, prop: string, expandCtx: ODataQueryContext<'Prop>) =
-        ctx.Expand[prop] <- expandCtx.ToQuery(";")
-        ctx
+        ctx.AddExpand<'Prop>(prop, expandCtx)
 
     [<CustomOperation("expand")>]
     member inline _.Expand<'Prop>(ctx: ODataQueryContext<'T>, prop: string, queries: Query seq) =
