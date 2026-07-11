@@ -17,7 +17,7 @@ type Person =
     }
 
 
-let inline expectQuery x y = Assert.Equal(x, y)
+let inline expectQuery (x: string) y = Assert.Equal(x, y)
 
 
 [<Fact>]
@@ -437,7 +437,9 @@ let ``expand should work`` () =
     
     odataQuery<Contact> { expand "Demo" [| |] }
     |> expectQuery "$select=Phone,Email,Demo&$expand=Demo"
-
+    
+    odataQuery<Demo> { expand "AppUserRole" (odata { select [| "UserRoleId" |] }) }
+    |> expectQuery "$select=Foo,Foo1,AppUserRole&$expand=AppUserRole($select=UserRoleId),Foo1($select=Name,Age)"
 
 
 [<Fact>]

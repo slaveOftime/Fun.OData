@@ -135,7 +135,7 @@ module Internal =
                         | _ -> ()
 
 
-        if excludedFields |> Seq.filter (fun x -> x.Contains "." |> not) |> Seq.length = fields.Length then
+        if (fields.Length <> 0 || selectFields.Length <> 0) && excludedFields |> Seq.filter (fun x -> x.Contains "." |> not) |> Seq.length = fields.Length then
             EmptyQuery
 
         else
