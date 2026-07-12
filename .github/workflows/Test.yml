@@ -1,12 +1,12 @@
 name: Build and publish nuget packages
 
 on:
-  push:
-    branches:
-    - master
-  pull_request:
-    branches:
-    - master
+  #push:
+  #  branches:
+  #  - master
+  release:
+    types: [published]
+    
 
 jobs:
   build:
@@ -26,4 +26,9 @@ jobs:
 
     - name: Run tests
       run: dotnet test      
-      
+
+    - name: Publish nuget packages
+      run: |
+        dotnet pack -c Release src/Fun.OData.Query/Fun.OData.Query.fsproj -o .
+        dotnet nuget push *.nupkg -s https://api.nuget.org/v3/index.json -k ${{secrets.NUGET_API_KEY}} --skip-duplicate
+    
