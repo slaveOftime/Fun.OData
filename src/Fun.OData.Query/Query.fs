@@ -35,6 +35,20 @@ module Query =
     let rec combineQuery spliter (qs: Query seq) =
         let safeAdd key map x state = if String.IsNullOrEmpty x then state else state |> Map.add key (map x)
 
+        // Expand and order by are multi-value options. Collect them in declaration order so
+        // multiple entries combine instead of the last one overwriting the previous ones.
+        let expands = ResizeArray<string * string>()
+        let orderBys = ResizeArray<string>()
+
+        let addExpand field value =
+            if not (String.IsNullOrEmpty field) && not (String.IsNullOrEmpty value) then
+                match expands |> Seq.tryFindIndex (fun (key, _) -> key = field) with
+                | Some i -> expands.[i] <- (field, value)
+                | None -> expands.Add(field, value)
+
+        let addOrderBy value =
+            if not (String.IsNullOrEmpty value) then orderBys.Add value
+
         let maps =
             qs
             |> Seq.distinct
@@ -45,26 +59,38 @@ module Query =
                     | External x -> s |> Map.add (sprintf "External-%d" s.Count) x
                     | Select x -> s |> safeAdd "Select" (sprintf "$select=%s") x
                     | SelectType t -> s |> Map.add "Select" (generateSelectQueryByType false t |> sprintf "$select=%s")
-                    | OrderBy x -> s |> safeAdd "OrderBy" (sprintf "$orderBy=%s") x
-                    | OrderByDesc x -> s |> safeAdd "OrderBy" (sprintf "$orderBy=%s desc") x
+                    | OrderBy x ->
+                        addOrderBy x
+                        s
+                    | OrderByDesc x ->
+                        addOrderBy (if String.IsNullOrEmpty x then x else sprintf "%s desc" x)
+                        s
                     | Count -> s |> Map.add "Count" "$count=true"
                     | Filter x -> s |> safeAdd (sprintf "Filter-%d" s.Count) (sprintf "%s") x
                     | Take x -> s |> safeAdd "Take" (sprintf "$top=%s") (string x)
                     | Skip x -> s |> safeAdd "Skip" (sprintf "$skip=%s") (string x)
                     | Compute x -> s |> safeAdd "Compute" (sprintf "$compute=%s") (string x)
-                    | Expand x -> s |> safeAdd "Expand" (sprintf "$expand=%s") x
-                    | ExpandEx ls ->
+                    | Expand x ->
+                        addExpand x x
                         s
-                        |> safeAdd
-                            "Expand"
-                            (sprintf "$expand=%s")
-                            (ls
-                             |> List.map (fun (fieldName, qs) ->
-                                 sprintf "%s%s" fieldName (if qs.Length = 0 then "" else sprintf "(%s)" (combineQuery ";" qs))
-                             )
-                             |> String.concat ",")
+                    | ExpandEx ls ->
+                        for fieldName, queries in ls do
+                            addExpand
+                                fieldName
+                                (sprintf "%s%s" fieldName (if queries.Length = 0 then "" else sprintf "(%s)" (combineQuery ";" queries)))
+                        s
                 )
                 Map.empty
+            |> fun s ->
+                if orderBys.Count = 0 then
+                    s
+                else
+                    s |> Map.add "OrderBy" (sprintf "$orderBy=%s" (orderBys |> String.concat ","))
+            |> fun s ->
+                if expands.Count = 0 then
+                    s
+                else
+                    s |> Map.add "Expand" (sprintf "$expand=%s" (expands |> Seq.map snd |> String.concat ","))
 
         [|
             yield! maps |> Map.filter (fun k _ -> k.StartsWith "Filter-" |> not) |> Map.toSeq |> Seq.map snd
@@ -100,11 +126,9 @@ module Query =
             |> Array.choose (fun x ->
                 if FSharpType.IsRecord x.PropertyType then
                     Some(x.Name, x.PropertyType)
-                elif
-                    FSharpType.IsRecordArray x.PropertyType
-                    || FSharpType.IsRecordList x.PropertyType
-                    || FSharpType.IsRecordOption x.PropertyType
-                then
+                elif FSharpType.IsRecordArray x.PropertyType then
+                    Some(x.Name, x.PropertyType.GetElementType())
+                elif FSharpType.IsRecordList x.PropertyType || FSharpType.IsRecordOption x.PropertyType then
                     Some(x.Name, x.PropertyType.GenericTypeArguments.[0])
                 else
                     None

@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="DslListTests.fs" />
     <Compile Include="DslCETests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

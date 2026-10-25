@@ -7,7 +7,7 @@ open Microsoft.FSharp.Reflection
 
 
 type FSharpType =
-    static member IsRecordArray(ty: Type) = ty.IsArray && FSharpType.IsRecord ty.GenericTypeArguments.[0]
+    static member IsRecordArray(ty: Type) = ty.IsArray && FSharpType.IsRecord(ty.GetElementType())
     static member IsRecordList(ty: Type) =
         ty.FullName.StartsWith "Microsoft.FSharp.Collections.FSharpList" && FSharpType.IsRecord ty.GenericTypeArguments.[0]
 
