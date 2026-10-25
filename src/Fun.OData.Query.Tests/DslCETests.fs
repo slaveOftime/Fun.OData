@@ -701,3 +701,90 @@ let ``maxLoopDeepth zero should work`` () =
     odataQuery<LoopData> { maxLoopDeepth -1 }
     |> expectQuery
         "$select=Id,LoopNav&$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav))"
+
+
+type ValueFilter =
+    {
+        Price: decimal
+        Id: Guid
+        CreatedDate: DateTime
+    }
+
+type NullableContact = { Name: string; Age: Nullable<int> }
+
+
+[<Fact>]
+let ``filter helpers should work`` () =
+    andQueries [ "A eq 1"; "B eq 2" ] |> expectQuery "(A eq 1) and (B eq 2)"
+    orQueries [ "A eq 1"; "B eq 2" ] |> expectQuery "(A eq 1) or (B eq 2)"
+
+    andOptionQuries [ Some "A eq 1"; None; Some ""; Some "B eq 2" ]
+    |> expectQuery "(A eq 1) and (B eq 2)"
+
+    orOptionQuries [ Some "A eq 1"; None; Some ""; Some "B eq 2" ]
+    |> expectQuery "(A eq 1) or (B eq 2)"
+
+    andOptionQuries [] |> expectQuery ""
+    orOptionQuries [ None ] |> expectQuery ""
+
+
+[<Fact>]
+let ``filterOrQuery should return query string`` () =
+    filterOrQuery<Contact> {
+        eq "Phone" "123"
+        startsWith (fun x -> x.Email) "a"
+    }
+    |> expectQuery "Phone eq '123' or startswith(Email, 'a')"
+
+
+[<Fact>]
+let ``value type filters should work`` () =
+    filterAndQuery<ValueFilter> {
+        gt (fun x -> x.Price) 10m
+        eq (fun x -> x.Id) (Guid.Parse "6f9619ff-8b86-d011-b42d-00c04fc964ff")
+        lt (fun x -> x.CreatedDate) (Some(DateTime(2024, 1, 2).ToString("yyyy-MM-dd")))
+    }
+    |> expectQuery
+        "Price gt 10 and Id eq 6f9619ff-8b86-d011-b42d-00c04fc964ff and CreatedDate lt '2024-01-02'"
+
+
+[<Fact>]
+let ``string values should be url encoded`` () =
+    filterAndQuery<Contact> {
+        eq (fun x -> x.Phone) "O'Brien"
+        contains (fun x -> x.Email) "a'b"
+    }
+    |> expectQuery "Phone eq 'O%27Brien' and contains(Email, 'a%27b')"
+
+
+[<Fact>]
+let ``pojo select and generateFor should work`` () =
+    odataQuery<Demo> { select typeof<Foo> } |> expectQuery "$select=Name,Age"
+
+    Query.generateFor<Foo> [] |> expectQuery "?$select=Name,Age"
+
+
+[<Fact>]
+let ``nullable member expressions should work`` () =
+    odataQuery<NullableContact> {
+        filterAnd<NullableContact> { gt (fun x -> x.Age.Value) 10 }
+    }
+    |> expectQuery "$select=Name,Age&$filter=(Age gt 10)"
+
+    odataQuery<NullableContact> { excludeSelect (fun x -> x.Age.Value) }
+    |> expectQuery "$select=Name"
+
+
+[<Fact>]
+let ``nested context should merge options`` () =
+    odataQuery<Person> {
+        odata { disableAutoExpand }
+    }
+    |> expectQuery "$select=Name,Age,Contact,Addresses"
+
+
+[<Fact>]
+let ``empty select should fall back to auto select`` () =
+    odataQuery<Contact> { select ([||]: string[]) }
+    |> expectQuery "$select=Phone,Email"
+
