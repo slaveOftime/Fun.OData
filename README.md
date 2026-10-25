@@ -1,16 +1,23 @@
 # Fun.OData
 
-Build query string for OData.
+Build OData GET query strings with a typed F# DSL.
 
-### With CE (fsharp computation expression)
+- Type-safe computation expression (`odataQuery` / `odata`)
+- Lower-allocation DU/list API (`Query.generate` / `Query.generateFor`)
+- Nested member paths, optional fields, and automatic record/list/array expansion
+- Nested `$expand` with per-expand `$filter`, `$orderby`, and paging
 
-This can provide better type safety, but maybe slower because it use reflection.  
-But you can also use plain text if you want to get better performance than DU.  
-You can check **demos/ODataDemo.Server** which contains how to setup <span style="color: green">OData + asp.net core MVC with fsharp + swagger support.</span>  
+## Install
 
-Let's see if you want to fetch below information:
+```bash
+dotnet add package Fun.OData.Query
+```
+
+## CE API
 
 ```fsharp
+open Fun.OData.Query
+
 type Part =
     {
         Nr: int
@@ -18,13 +25,8 @@ type Part =
     }
 and Action = { Nr: int; Tid: int; AccountNrFromNavigation: AccountNrFromNavigation }
 and AccountNrFromNavigation = { Nr: string; Caption: string }
-```
 
-You can just do it like:
-
-```fsharp
-http.GetStringAsync(
-    "api/v1/Parts?" + 
+let query =
     odataQuery<Part> {
         count
         take 2
@@ -37,23 +39,41 @@ http.GetStringAsync(
                     gt (fun x -> x.Tid) 1
                     lt (fun x -> x.Tid) 10
                     custom (fun x -> x.Tid) (sprintf "%s eq 10")
-                    // Option value is used for determine if a filter should be applied
-                    eq (fun x -> x.Tid) (Some 1) // Tid eq 1
-                    eq (fun x -> x.Tid) (Some null) // Tid eq null 
-                    eq (fun x -> x.Tid) None // Will not put in the query string
+                    // Some value -> included, None -> omitted, Some null -> "eq null"
+                    eq (fun x -> x.Tid) (Some 1)
+                    eq (fun x -> x.Tid) (Some null)
+                    eq (fun x -> x.Tid) None
                 }
             }
         )
     }
-)
+
+http.GetStringAsync("api/v1/Parts?" + query)
 ```
 
-Then it will send **GET** request with url:
+Generated query string:
+
 ```text
-http://localhost:9090/api/v1/Parts?$select=Nr,Actions&$count=true&$top=2&$orderBy=Nr&$expand=Actions($select=Nr,Tid,AccountNrFromNavigation;$top=3;$orderBy=Tid;$expand=AccountNrFromNavigation($select=Nr,Caption);$filter=(Tid%20gt%201%20and%20Tid%20lt%2010))
+$select=Nr,Actions&$count=true&$top=2&$orderby=Nr&$expand=Actions($select=Nr,Tid,AccountNrFromNavigation;$top=3;$orderby=Tid;$expand=AccountNrFromNavigation($select=Nr,Caption);$filter=(Tid gt 1 and Tid lt 10 and (Tid eq 10) and Tid eq 1 and Tid eq null))
 ```
 
-Instead of use **odataQuery** you can use **odata**, because it will return you **ODataQueryContext** which you can call **ToQuery** to generate the final query string. But with this way, you can wrap it into a helper function:
+The library URL-encodes string literals. Your HTTP client is responsible for encoding spaces and other characters in the rest of the query string.
+
+### Query contexts
+
+`odataQuery` returns a string. `odata` returns an `ODataQueryContext` so you can build the query first and serialize it later:
+
+```fsharp
+let queryContext =
+    odata<Part> {
+        count
+        take 20
+    }
+
+let queryString = queryContext.ToQuery()
+```
+
+This makes it easy to wrap requests in a typed helper:
 
 ```fsharp
 type ODataResult<'T> =
@@ -64,40 +84,94 @@ type ODataResult<'T> =
     }
 
 type HttpClient with
-    member http.Get<'T>(path, queryContext: ODataQueryContext<'T>) =
-        http.GetStringAsync(path + "?" + queryContext.ToQuery()) // You may need error handling in production
-        |> fromJson<ODataResult<'T>> // json deserialize
+    member http.Get<'T>(path: string, query: ODataQueryContext<'T>) =
+        http.GetStringAsync(path + "?" + query.ToQuery())
+        |> fromJson<ODataResult<'T>>
 ```
 
-To use it, you just call:
-
 ```fsharp
-http.Get<Part> (
+http.Get<Part>(
     odata {
         count
         take 2
-        ...
+        orderBy (fun x -> x.Nr)
     }
 )
 ```
 
-Below you can see more demos:
+### Nested members and optional values
+
+Member expressions can point to nested records. For `option` and `Nullable<'T>` properties, append `.Value`; it is ignored when the OData field name is generated.
+
+```fsharp
+type Contact = { Phone: string; Email: string }
+type Address = { Street: string; Room: int }
+
+type Person =
+    {
+        Name: string
+        Age: int
+        Contact: Contact
+        Addresses: Address list
+    }
+
+odataQuery<Person> {
+    filterAnd<Person> { eq (fun x -> x.Contact.Phone) "123" }
+    orderBy (fun x -> x.Contact.Phone)
+    excludeSelect (fun x -> x.Contact.Phone)
+}
+// $select=Name,Age,Contact,Addresses&$orderby=Contact.Phone&$expand=Contact($select=Email),Addresses($select=Street,Room)&$filter=(Contact.Phone eq '123')
+
+type PersonWithOptionalContact = { Name: string; Contact: Contact option }
+
+odataQuery<PersonWithOptionalContact> {
+    filterAnd<PersonWithOptionalContact> { eq (fun x -> x.Contact.Value.Phone) "123" }
+}
+// $select=Name,Contact&$expand=Contact($select=Phone,Email)&$filter=(Contact.Phone eq '123')
+```
+
+### Filter helpers
+
+`filterAnd`, `filterOr`, and `filterNot` can be nested. `filterNotQuery` returns the filter string directly.
+
+```fsharp
+filterNotQuery<Contact> {
+    filterAnd {
+        "Phone eq '1'"
+        filterNot { "Email eq '2'" }
+    }
+}
+// not((Phone eq '1') and (not(Email eq '2')))
+```
+
+Use the string overloads when you want to avoid expression trees:
+
+```fsharp
+odataQuery<Person> {
+    filterAnd {
+        gt "Age" 10
+        contains "Name" "search"
+    }
+}
+```
+
+### Filtering, paging, and yielding filters
 
 ```fsharp
 odata<DemoDataBrief> {
-    skip ((testFilter.Page - 1) * testFilter.PageSize)
-    take testFilter.PageSize
+    skip ((filter.Page - 1) * filter.PageSize)
+    take filter.PageSize
     count
-    keyValue "etest1" "123" // your own query key value
+    keyValue "etest1" "123" // your own query key/value
     keyValue "etest2" "456"
     filterOr {
-        contains (fun x -> x.Name) testFilter.SearchName
-        filterAnd { // you can also nest filter
-            gt (fun x -> x.Price) testFilter.MinPrice
-            lt (fun x -> x.CreatedDate) (testFilter.FromCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
-            lt (fun x -> x.CreatedDate) (testFilter.ToCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
+        contains (fun x -> x.Name) filter.SearchName
+        filterAnd {
+            gt (fun x -> x.Price) filter.MinPrice
+            lt (fun x -> x.CreatedDate) (filter.FromCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
+            lt (fun x -> x.CreatedDate) (filter.ToCreatedDate |> Option.map (fun x -> x.ToString("yyyy-MM-dd")))
         }
-        for i in 1..3 do // you can yield filters
+        for i in 1..3 do // loops can yield filters
             filterAnd<{| Address: string |}> {
                 eq (fun x -> x.Address) (Some $"a{i}")
                 eq (fun x -> x.Address) (Some $"b{i}")
@@ -105,6 +179,12 @@ odata<DemoDataBrief> {
     }
 }
 ```
+
+`None` omits a filter, while `Some null` produces `eq null`.
+
+### Automatic expansion
+
+By default, records, record arrays, record lists, and record options are expanded automatically.
 
 ```fsharp
 odata<{| Id: int
@@ -116,22 +196,21 @@ odata<{| Id: int
 }
 ```
 
-By default it will auto expand record, record of array, record of list and record of option.  
-But you can also override its behavior:
-
+Override the default expansion when needed:
 
 ```fsharp
 odata<Person> {
     expandPoco (fun x -> x.Contact)
     expandList (fun x -> x.Addresses) (
-        odata { // you can also nest
-            filter ...
+        odata {
+            filterAnd { startsWith (fun x -> x.Street) "Main" }
+            orderBy (fun x -> x.Room)
         }
     )
 }
 ```
 
-You can also disable auto expand for better performance, if you do not want any for plain object.
+Disable auto expansion when the endpoint returns flat data:
 
 ```fsharp
 odata<Person> {
@@ -139,15 +218,30 @@ odata<Person> {
 }
 ```
 
-The **odata<'T> { ... }** will generate ODataQueryContext which you can call **ToQuery()** to generate the final string and combine with your logic.  
-Please check  **demos/ODataDemo.Wasm/Hooks.fs** for an example.
+For recursive records, set the maximum expansion depth with `maxLoopDeepth`.
 
+### Expanding a DU query list
 
-## With DU (fsharp discriminated union) list
-
-This is old implementation but it works fine. Personally I'd prefer CE style because better type safety.
+`expand` accepts a `Query` list; nested options are joined with `;` and `filter` conditions are combined correctly:
 
 ```fsharp
+odataQuery<Part> {
+    expand "Actions" [
+        Select "Nr,Tid"
+        Take 3
+        OrderBy "Tid"
+        Filter "Tid gt 1"
+    ]
+}
+```
+
+## DU/list API
+
+The list API is convenient for hot paths because it does not build expression trees. `Query.generate` returns a string with a leading `?`.
+
+```fsharp
+open Fun.OData.Query
+
 let query =
     [
         SelectType typeof<DemoDataBrief>
@@ -156,6 +250,7 @@ let query =
         Count
         External "etest1=123"
         External "etest2=56"
+        OrderBy "Name"
         Filter (filter.SearchName |> Option.map (contains "Name") |> Option.defaultValue "")
         Filter (andQueries [
             match filter.MinPrice with
@@ -172,7 +267,9 @@ let query =
     |> Query.generate
 ```
 
-With Query.generateFor some type, you can get SelectType and ExpandEx automatically. It supports expand record, record of array, record of list and record of option.
+Multiple `Expand`, `ExpandEx`, and `OrderBy` entries accumulate in declaration order. Single-value options such as `Take`, `Skip`, and `Select` keep their last value. Expanding the same field twice overrides the earlier expansion.
+
+`Query.generateFor<'T>` derives `SelectType` and nested `ExpandEx` entries from the record shape:
 
 ```fsharp
 Query.generateFor<
@@ -187,29 +284,43 @@ Query.generateFor<
 
 ## Benchmarks
 
-|                  Method |         Mean |       Error |      StdDev |       Median |   Gen 0 |  Gen 1 | Allocated |
-|------------------------ |-------------:|------------:|------------:|-------------:|--------:|-------:|----------:|
-|         AnonymousWithDU | 177,451.1 ns | 3,316.00 ns | 6,146.42 ns | 175,928.9 ns | 10.0098 |      - |     62 KB |
-|         AnonymousWithCE | 113,811.4 ns | 1,239.00 ns | 1,158.97 ns | 113,960.2 ns |  5.1270 |      - |     32 KB |
-|       CustomQueryWithDU |  16,905.9 ns |   335.33 ns |   638.01 ns |  16,650.8 ns |  1.4648 |      - |      9 KB |
-|       CustomQueryWithCE |  11,405.1 ns |   131.92 ns |   123.40 ns |  11,412.7 ns |  0.7172 |      - |      4 KB |
-|          FilterWithList |   1,181.2 ns |    23.32 ns |    54.05 ns |   1,160.7 ns |  0.2956 |      - |      2 KB |
-|  FilterWithReflectionCE | 103,187.4 ns | 1,537.92 ns | 1,438.57 ns | 102,927.2 ns |  9.3994 | 0.1221 |     58 KB |
-|    FilterWithOptionList |   1,188.1 ns |    19.89 ns |    18.60 ns |   1,185.2 ns |  0.3223 |      - |      2 KB |
-| FilterWithOptionPlainCE |     960.9 ns |    18.06 ns |    35.66 ns |     951.5 ns |  0.3452 |      - |      2 KB |
-|          OverrideWithDU |  29,714.3 ns |   575.33 ns |   806.53 ns |  29,414.6 ns |  1.8921 |      - |     12 KB |
-|          OverrideWithCE |  20,597.7 ns |   319.26 ns |   298.64 ns |  20,554.2 ns |  0.9155 |      - |      6 KB |
+Measured with BenchmarkDotNet 0.13.1 on .NET 6 using the in-process toolchain. Type metadata and nested expand shapes are cached, so repeated query generation does not re-run reflection.
+
+| Method | Mean (µs) | Error | Gen 0 | Allocated |
+|---|---:|---:|---:|---:|
+| AnonymousWithDU | 15.50 | 0.60 | 3.2654 | 20 KB |
+| AnonymousWithCE | 383.36 | 20.00 | 4.3945 | 28 KB |
+| CustomQueryWithDU | 4.35 | 0.16 | 0.8774 | 5 KB |
+| CustomQueryWithCE | 2.05 | 0.08 | 0.5455 | 3 KB |
+| FilterWithList | 1.67 | 0.05 | 0.3185 | 2 KB |
+| FilterWithReflectionCE | 138.68 | 3.59 | 9.2773 | 58 KB |
+| FilterWithOptionList | 1.75 | 0.07 | 0.3452 | 2 KB |
+| FilterWithOptionPlainCE | 1.16 | 0.03 | 0.3452 | 2 KB |
+| OverrideWithDU | 3.62 | 0.12 | 0.7896 | 5 KB |
+| OverrideWithCE | 92.66 | 3.42 | 0.7324 | 6 KB |
+| MultiExpandWithDU | 18.97 | 0.83 | 3.8757 | 24 KB |
+| MultiFilterWithDU | 5.22 | 0.23 | 1.2283 | 8 KB |
+| NestedMemberFilterWithCE | 282.45 | 39.72 | 16.1133 | 101 KB |
+
+The reflection-based CE benchmarks include the cost of constructing expression trees in the caller. Use the string overloads or the DU/list API when that cost matters.
+
+Run the benchmarks with:
+
+```bash
+dotnet run -c Release --project src/Fun.OData.Query.Benchmarks -- --filter "*" --inProcess
+```
 
 ## Server side [Deprecated]
 
-1. Set OData service for asp.net core + giraffe
+1. Set up an OData service for ASP.NET Core + Giraffe.
 2. Use it like:
-   ```fsharp
-    // For any sequence
-    GET >=> routeCi  "/demo"    >=> OData.query (demoData.AsQueryable())
-    GET >=> routeCif "/demo(%i)"   (OData.item  (fun id -> demoData.Where(fun x -> x.Id = id).AsQueryable()))
 
-    // With entityframework core
-    GET >=> routeCi  "/person"  >=> OData.fromService  (fun (db: DemoDbContext) -> db.Persons.AsQueryable())
-    GET >=> routeCif "/person(%i)" (OData.fromServicei (fun (db: DemoDbContext) id -> db.Persons.Where(fun x -> x.Id = id).AsQueryable()))
-   ```
+```fsharp
+// For any sequence
+GET >=> routeCi  "/demo"    >=> OData.query (demoData.AsQueryable())
+GET >=> routeCif "/demo(%i)"   (OData.item  (fun id -> demoData.Where(fun x -> x.Id = id).AsQueryable()))
+
+// With Entity Framework Core
+GET >=> routeCi  "/person"  >=> OData.fromService  (fun (db: DemoDbContext) -> db.Persons.AsQueryable())
+GET >=> routeCif "/person(%i)" (OData.fromServicei (fun (db: DemoDbContext) id -> db.Persons.Where(fun x -> x.Id = id).AsQueryable()))
+```
