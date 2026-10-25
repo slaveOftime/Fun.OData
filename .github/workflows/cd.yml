@@ -1,4 +1,4 @@
-name: Build and publish nuget packages
+name: cd - build and publish nuget packages
 
 on:
   #push:
