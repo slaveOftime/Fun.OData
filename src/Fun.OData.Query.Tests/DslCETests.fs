@@ -566,3 +566,138 @@ let ``select should work`` () =
         })
     }
     |> expectQuery "$select=Name"
+
+
+type PersonWithOptionalContact = { Name: string; Contact: Contact option }
+
+
+[<Fact>]
+let ``ge and le should work`` () =
+    odataQuery<Contact> {
+        filterAnd<Contact> {
+            ge (fun x -> x.Phone) "123"
+            le (fun x -> x.Phone) "456"
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=(Phone ge '123' and Phone le '456')"
+
+
+[<Fact>]
+let ``startsWith and endsWith should work`` () =
+    odataQuery<Contact> {
+        filterAnd<Contact> {
+            startsWith (fun x -> x.Phone) "12#"
+            endsWith "Email" "45&"
+            startsWith (fun x -> x.Phone) (Some "12")
+            startsWith (fun x -> x.Phone) (None: string option)
+            endsWith (fun x -> x.Email) (None: string option)
+            startsWith "Phone" null
+            endsWith "Email" null
+            contains "Phone" null
+        }
+    }
+    |> expectQuery "$select=Phone,Email&$filter=(startswith(Phone, '12%23') and endswith(Email, '45%26') and startswith(Phone, '12'))"
+
+
+[<Fact>]
+let ``nested member expressions should work`` () =
+    odataQuery<Person> {
+        filterAnd<Person> { eq (fun x -> x.Contact.Phone) "123" }
+    }
+    |> expectQuery
+        "$select=Name,Age,Contact,Addresses&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room)&$filter=(Contact.Phone eq '123')"
+
+    odataQuery<Person> { orderBy (fun x -> x.Contact.Phone) }
+    |> expectQuery
+        "$select=Name,Age,Contact,Addresses&$orderby=Contact.Phone&$expand=Contact($select=Phone,Email),Addresses($select=Street,Room)"
+
+    odataQuery<Person> { excludeSelect (fun x -> x.Contact.Phone) }
+    |> expectQuery
+        "$select=Name,Age,Contact,Addresses&$expand=Contact($select=Email),Addresses($select=Street,Room)"
+
+    odataQuery<PersonWithOptionalContact> {
+        filterAnd<PersonWithOptionalContact> { eq (fun x -> x.Contact.Value.Phone) "123" }
+    }
+    |> expectQuery "$select=Name,Contact&$expand=Contact($select=Phone,Email)&$filter=(Contact.Phone eq '123')"
+
+    odataQuery<PersonWithOptionalContact> {
+        excludeSelect (fun x -> x.Contact.Value.Phone)
+    }
+    |> expectQuery "$select=Name,Contact&$expand=Contact($select=Email)"
+
+
+[<Fact>]
+let ``orderBy overloads should work`` () =
+    odataQuery<Contact> {
+        orderBy "Phone"
+        orderByDesc "Email"
+    }
+    |> expectQuery "$select=Phone,Email&$orderby=Phone,Email desc"
+
+    odataQuery<Contact> { orderBy (Some(true, "Phone")) }
+    |> expectQuery "$select=Phone,Email&$orderby=Phone desc"
+
+    odataQuery<Contact> { orderBy (Some(false, "Phone")) }
+    |> expectQuery "$select=Phone,Email&$orderby=Phone"
+
+    odataQuery<Contact> { orderBy (true, "Phone") }
+    |> expectQuery "$select=Phone,Email&$orderby=Phone desc"
+
+    odataQuery<Contact> { orderBy (None: (bool * string) option) }
+    |> expectQuery "$select=Phone,Email"
+
+
+[<Fact>]
+let ``optional operations should work`` () =
+    odataQuery<Contact> {
+        take (Some 10)
+        take (None: int option)
+        skip None
+        compute (Some "Phone as P")
+        compute (None: string option)
+        keyValue "a" (Some "1")
+        keyValue "b" None
+        filter (Some "Phone eq '1'")
+        filter (None: string option)
+    }
+    |> expectQuery "$select=Phone,Email&$top=10&$compute=Phone as P&a=1&$filter=(Phone eq '1')"
+
+
+[<Fact>]
+let ``select by type should work`` () =
+    odataQuery<Person> { select typeof<Contact> }
+    |> expectQuery "$select=Phone,Email"
+
+    odataQuery<Person> { select [| "Name"; "Age" |] }
+    |> expectQuery "$select=Name,Age"
+
+
+[<Fact>]
+let ``filterNotQuery should return query string`` () =
+    filterNotQuery<Contact> {
+        filterAnd {
+            "demo"
+            filterNot { "lol" }
+        }
+    }
+    |> expectQuery "not((demo) and (not(lol)))"
+
+
+[<Fact>]
+let ``expand with query list should use nested separators`` () =
+    odataQuery<Contact> {
+        expand "Demo" [ Select "Name"; Count; Filter "Name eq 'a'"; ExpandEx [ "Sub", [ Select "Id" ] ] ]
+    }
+    |> expectQuery
+        "$select=Phone,Email,Demo&$expand=Demo($count=true;$expand=Sub($select=Id);$select=Name;$filter=(Name eq 'a'))"
+
+
+[<Fact>]
+let ``maxLoopDeepth zero should work`` () =
+    odataQuery<LoopData> { maxLoopDeepth 0 }
+    |> expectQuery
+        "$select=Id,LoopNav&$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav))"
+
+    odataQuery<LoopData> { maxLoopDeepth -1 }
+    |> expectQuery
+        "$select=Id,LoopNav&$expand=LoopNav($select=Id,LoopNav;$expand=LoopNav($select=Id,LoopNav))"

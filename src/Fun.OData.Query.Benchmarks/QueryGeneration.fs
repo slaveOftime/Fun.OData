@@ -37,6 +37,13 @@ type DemoDataBrief =
         CreatedDate: DateTime
     }
 
+type NestedDemoData =
+    {
+        First: DemoData
+        Second: DemoDataBrief
+        Third: Item
+    }
+
 type Filter =
     {
         PageSize: int
@@ -164,4 +171,29 @@ type QueryGeneration() =
             count
             take 5
             otherQuery
+        }
+
+
+    [<Benchmark>]
+    member _.MultiExpandWithDU() : string =
+        Query.generateFor<NestedDemoData> [
+            ExpandEx [ "First", [ Filter "Id gt 1"; OrderBy "Id" ] ]
+            ExpandEx [ "Second", [ Select "Id,Name" ] ]
+            ExpandEx [ "Third", [ Select "Id"; Take 3 ] ]
+        ]
+
+
+    [<Benchmark>]
+    member _.MultiFilterWithDU() : string =
+        [ for i in 1..12 -> Filter (sprintf "Price gt %d" i) ]
+        |> Query.generate
+
+
+    [<Benchmark>]
+    member _.NestedMemberFilterWithCE() : string =
+        filterAndQuery<NestedDemoData> {
+            eq (fun x -> x.First.Name) (Some "search")
+            ge (fun x -> x.First.Price) 10m
+            startsWith (fun x -> x.First.Description) (Some "abc")
+            endsWith (fun x -> x.Second.Name) (Some "xyz")
         }

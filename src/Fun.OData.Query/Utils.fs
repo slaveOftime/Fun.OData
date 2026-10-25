@@ -2,8 +2,15 @@
 module Fun.OData.Query.Internal.Utils
 
 open System
+open System.Collections.Generic
 open System.Linq.Expressions
+open System.Reflection
 open Microsoft.FSharp.Reflection
+
+
+let private propertiesCache = Dictionary<Type, PropertyInfo[]>()
+let private propertyNamesCache = Dictionary<Type, string list>()
+let private cacheLock = obj()
 
 
 type FSharpType =
@@ -25,20 +32,51 @@ type FSharpType =
 
 
 let rec getExpressionName (exp: Expression) =
+    let isTransparentValue (memberInfo: MemberInfo) =
+        let declaringType = memberInfo.DeclaringType
+        memberInfo.Name = "Value"
+        && not (isNull declaringType)
+        && (declaringType.FullName.StartsWith "Microsoft.FSharp.Core.FSharpOption"
+            || declaringType.FullName.StartsWith "System.Nullable")
+
     match exp.NodeType with
-    | ExpressionType.MemberAccess -> (exp :?> MemberExpression).Member.Name
-    | ExpressionType.Lambda -> ((exp :?> LambdaExpression).Body :?> MemberExpression).Member.Name
-    | ExpressionType.Convert -> getExpressionName (exp :?> UnaryExpression).Operand
+    | ExpressionType.MemberAccess ->
+        let memberExp = exp :?> MemberExpression
+        match memberExp.Expression with
+        | null -> memberExp.Member.Name
+        | parent when parent.NodeType = ExpressionType.Parameter -> memberExp.Member.Name
+        | parent when isTransparentValue memberExp.Member -> getExpressionName parent
+        | parent -> sprintf "%s.%s" (getExpressionName parent) memberExp.Member.Name
+    | ExpressionType.Lambda -> getExpressionName ((exp :?> LambdaExpression).Body)
+    | ExpressionType.Convert -> getExpressionName ((exp :?> UnaryExpression).Operand)
     | _ -> failwith "Unsupported expression"
 
+let getProperties (sourceType: Type) =
+    lock cacheLock (fun () ->
+        match propertiesCache.TryGetValue sourceType with
+        | true, fields -> fields
+        | _ ->
+            let fields =
+                if FSharpType.IsRecord sourceType then
+                    FSharpType.GetRecordFields sourceType
+                elif FSharpType.IsRecordOption sourceType then
+                    FSharpType.GetRecordFields sourceType.GenericTypeArguments.[0]
+                else
+                    sourceType.GetProperties()
+
+            propertiesCache[sourceType] <- fields
+            fields
+    )
+
 let getPropertiesForType sourceType =
-    if FSharpType.IsRecord sourceType then
-        FSharpType.GetRecordFields sourceType |> Seq.map (fun x -> x.Name)
-    elif FSharpType.IsRecordOption sourceType then
-        FSharpType.GetRecordFields sourceType.GenericTypeArguments.[0] |> Seq.map (fun x -> x.Name)
-    else
-        sourceType.GetProperties() |> Seq.map (fun x -> x.Name)
-    |> Seq.toList
+    lock cacheLock (fun () ->
+        match propertyNamesCache.TryGetValue sourceType with
+        | true, names -> names
+        | _ ->
+            let names = getProperties sourceType |> Array.map (fun x -> x.Name) |> Array.toList
+            propertyNamesCache[sourceType] <- names
+            names
+    )
 
 let generateSelectQueryByPropertyNames lowerFirstCase names =
     names

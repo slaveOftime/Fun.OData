@@ -230,3 +230,21 @@ let ``generateFor should merge and override extra queries`` () =
 let ``combineQuery should use the given separator`` () =
     Query.combineQuery ";" [ Select "Id"; Count; Filter "Id gt 1" ]
     |> expectQuery "$count=true;$select=Id;$filter=(Id gt 1)"
+
+
+[<Fact>]
+let ``more than nine filters keep declaration order`` () =
+    [ for i in 1..12 -> Filter (sprintf "A eq %d" i) ]
+    |> Query.generate
+    |> expectQuery
+        ("?$filter="
+         + ([ 1..12 ] |> List.map (sprintf "(A eq %d)") |> String.concat " and "))
+
+
+[<Fact>]
+let ``more than nine externals keep declaration order`` () =
+    [ for i in 1..12 -> External (sprintf "e%d=%d" i i) ]
+    |> Query.generate
+    |> expectQuery
+        ("?"
+         + ([ 1..12 ] |> List.map (fun i -> sprintf "e%d=%d" i i) |> String.concat "&"))

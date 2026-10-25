@@ -1,6 +1,7 @@
 namespace Fun.OData.Query
 
 open System
+open System.Collections.Generic
 open Microsoft.FSharp.Reflection
 open Fun.OData.Query.Internal.Utils
 
@@ -35,16 +36,21 @@ module Query =
     let rec combineQuery spliter (qs: Query seq) =
         let safeAdd key map x state = if String.IsNullOrEmpty x then state else state |> Map.add key (map x)
 
-        // Expand and order by are multi-value options. Collect them in declaration order so
-        // multiple entries combine instead of the last one overwriting the previous ones.
+        // Multi-value options are collected in declaration order so that repeated entries
+        // combine instead of overwriting each other.
         let expands = ResizeArray<string * string>()
+        let expandIndexes = Dictionary<string, int>()
         let orderBys = ResizeArray<string>()
+        let filters = ResizeArray<string>()
+        let externals = ResizeArray<string>()
 
         let addExpand field value =
             if not (String.IsNullOrEmpty field) && not (String.IsNullOrEmpty value) then
-                match expands |> Seq.tryFindIndex (fun (key, _) -> key = field) with
-                | Some i -> expands.[i] <- (field, value)
-                | None -> expands.Add(field, value)
+                match expandIndexes.TryGetValue field with
+                | true, i -> expands.[i] <- (field, value)
+                | _ ->
+                    expandIndexes.Add(field, expands.Count)
+                    expands.Add(field, value)
 
         let addOrderBy value =
             if not (String.IsNullOrEmpty value) then orderBys.Add value
@@ -56,7 +62,9 @@ module Query =
                 (fun s q ->
                     match q with
                     | Id _ -> s
-                    | External x -> s |> Map.add (sprintf "External-%d" s.Count) x
+                    | External x ->
+                        if not (String.IsNullOrEmpty x) then externals.Add x
+                        s
                     | Select x -> s |> safeAdd "Select" (sprintf "$select=%s") x
                     | SelectType t -> s |> Map.add "Select" (generateSelectQueryByType false t |> sprintf "$select=%s")
                     | OrderBy x ->
@@ -66,7 +74,9 @@ module Query =
                         addOrderBy (if String.IsNullOrEmpty x then x else sprintf "%s desc" x)
                         s
                     | Count -> s |> Map.add "Count" "$count=true"
-                    | Filter x -> s |> safeAdd (sprintf "Filter-%d" s.Count) (sprintf "%s") x
+                    | Filter x ->
+                        if not (String.IsNullOrEmpty x) then filters.Add x
+                        s
                     | Take x -> s |> safeAdd "Take" (sprintf "$top=%s") (string x)
                     | Skip x -> s |> safeAdd "Skip" (sprintf "$skip=%s") (string x)
                     | Compute x -> s |> safeAdd "Compute" (sprintf "$compute=%s") (string x)
@@ -82,6 +92,10 @@ module Query =
                 )
                 Map.empty
             |> fun s ->
+                externals
+                |> Seq.indexed
+                |> Seq.fold (fun s (index, value) -> s |> Map.add (sprintf "External-%05d" index) value) s
+            |> fun s ->
                 if orderBys.Count = 0 then
                     s
                 else
@@ -93,12 +107,10 @@ module Query =
                     s |> Map.add "Expand" (sprintf "$expand=%s" (expands |> Seq.map snd |> String.concat ","))
 
         [|
-            yield! maps |> Map.filter (fun k _ -> k.StartsWith "Filter-" |> not) |> Map.toSeq |> Seq.map snd
+            yield! maps |> Map.toSeq |> Seq.map snd
 
-            maps
-            |> Map.filter (fun k _ -> k.StartsWith "Filter-")
-            |> Map.toSeq
-            |> Seq.map (snd >> sprintf "(%s)")
+            filters
+            |> Seq.map (sprintf "(%s)")
             |> String.concat " and "
             |> function
                 | "" -> ""
@@ -119,41 +131,53 @@ module Query =
         |> fun x -> x + "?" + combineQuery "&" quries
 
 
-    // This will generate selected fields and expan nexted field according to the record structure
-    let inline generateFor<'T> quries =
-        let rec loop (ty: Type) : Query option =
-            FSharpType.GetRecordFields ty
-            |> Array.choose (fun x ->
-                if FSharpType.IsRecord x.PropertyType then
-                    Some(x.Name, x.PropertyType)
-                elif FSharpType.IsRecordArray x.PropertyType then
-                    Some(x.Name, x.PropertyType.GetElementType())
-                elif FSharpType.IsRecordList x.PropertyType || FSharpType.IsRecordOption x.PropertyType then
-                    Some(x.Name, x.PropertyType.GenericTypeArguments.[0])
-                else
-                    None
-            )
-            |> Array.fold
-                (fun state (name, ty) ->
-                    state
-                    @ [
-                        name,
-                        [
-                            SelectType ty
-                            match loop ty with
-                            | Some x -> x
-                            | None -> ()
-                        ]
-                    ]
-                )
-                []
-            |> function
-                | [] -> None
-                | x -> Some(ExpandEx x)
+    let private nestedExpandCache = Dictionary<Type, Query option>()
+    let private nestedExpandLock = obj()
 
+    let private generateNestedExpand (ty: Type) : Query option =
+        let rec loop (ty: Type) : Query option =
+            lock nestedExpandLock (fun () ->
+                match nestedExpandCache.TryGetValue ty with
+                | true, query -> query
+                | _ ->
+                    let query =
+                        getProperties ty
+                        |> Array.choose (fun x ->
+                            if FSharpType.IsRecord x.PropertyType then
+                                Some(x.Name, x.PropertyType)
+                            elif FSharpType.IsRecordArray x.PropertyType then
+                                Some(x.Name, x.PropertyType.GetElementType())
+                            elif FSharpType.IsRecordList x.PropertyType || FSharpType.IsRecordOption x.PropertyType then
+                                Some(x.Name, x.PropertyType.GenericTypeArguments.[0])
+                            else
+                                None
+                        )
+                        |> Array.map (fun (name, ty) ->
+                            name,
+                            [
+                                SelectType ty
+                                match loop ty with
+                                | Some x -> x
+                                | None -> ()
+                            ]
+                        )
+                        |> Array.toList
+                        |> function
+                            | [] -> None
+                            | x -> Some(ExpandEx x)
+
+                    nestedExpandCache[ty] <- query
+                    query
+            )
+
+        loop ty
+
+
+    // This will generate selected fields and expan nexted field according to the record structure
+    let generateFor<'T> quries =
         [|
             generateSelectQuery<'T> () |> Select
-            match loop typeof<'T> with
+            match generateNestedExpand typeof<'T> with
             | Some x -> x
             | None -> ()
             yield! quries

@@ -21,7 +21,7 @@ module Internal =
     [<Literal>]
     let EmptyQuery = "<EMPTY>"
 
-    let getNestedExcludes (name) (excludedFields: string seq) =
+    let getNestedExcludes (name: string) (excludedFields: string seq) =
         excludedFields
         |> Seq.choose (fun x ->
             if x.StartsWith name && x.Length > name.Length + 1 then
@@ -48,11 +48,7 @@ module Internal =
             if selectFields.Length > 0 then
                 List.empty
             else
-                if FSharpType.IsRecord ty then
-                    FSharpType.GetRecordFields ty
-                else
-                    ty.GetProperties()
-                |> Seq.toList
+                getProperties ty |> Array.toList
 
         let getNestedExcludes x = getNestedExcludes x excludedFields
 
@@ -461,7 +457,7 @@ type ODataQueryBuilder<'T>() =
 
     [<CustomOperation("expand")>]
     member inline _.Expand<'Prop>(ctx: ODataQueryContext<'T>, prop: string, queries: Query seq) =
-        ctx.Expand[prop] <- Query.generate(queries).Substring(1)
+        ctx.Expand[prop] <- Query.combineQuery ";" queries
         ctx
 
 
@@ -783,6 +779,8 @@ type OdataAndQuery<'T>() =
 
 type OdataNotQuery<'T>() =
     inherit ODataNotFilterBuilder<'T>()
+
+    member _.Run(ctx: ODataFilterContext<'T>) = ctx.ToQuery()
 
 
 /// Generate odata query context

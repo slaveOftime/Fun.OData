@@ -1,9 +1,12 @@
-﻿open BenchmarkDotNet.Running
+﻿open System.Reflection
+open BenchmarkDotNet.Running
 open Fun.OData.Query.Benchmarks
 
 
-QueryGeneration().CustomQueryWithDU() |> printfn "DU: %s"
-QueryGeneration().CustomQueryWithCE() |> printfn "CE: %s"
+[<EntryPoint>]
+let main args =
+    QueryGeneration().CustomQueryWithDU() |> printfn "DU: %s"
+    QueryGeneration().CustomQueryWithCE() |> printfn "CE: %s"
 
-
-BenchmarkRunner.Run(System.Reflection.Assembly.GetExecutingAssembly()) |> ignore
+    BenchmarkSwitcher.FromAssembly(Assembly.GetExecutingAssembly()).Run(args) |> ignore
+    0
