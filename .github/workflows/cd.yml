@@ -15,6 +15,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    
+    - name: NuGet login (OIDC -> short-lived API key)
+      id: nuget-login
+      uses: NuGet/login@v1
+      with:
+        # nuget.org profile name (the owner of the trusted publishing policy)
+        user: slaveoftime
 
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v4
@@ -30,5 +37,5 @@ jobs:
     - name: Publish nuget packages
       run: |
         dotnet pack -c Release src/Fun.OData.Query/Fun.OData.Query.fsproj -o .
-        dotnet nuget push *.nupkg -s https://api.nuget.org/v3/index.json -k ${{secrets.NUGET_API_KEY}} --skip-duplicate
+        dotnet nuget push *.nupkg -s https://api.nuget.org/v3/index.json -k ${{steps.nuget-login.outputs.NUGET_API_KEY}} --skip-duplicate
     
